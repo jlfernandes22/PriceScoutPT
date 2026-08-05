@@ -317,6 +317,9 @@ const ComparisonDetails = ({ shoppingList, items, favoriteIds, onToggleFavorite 
             );
           })}
         </ScrollView>
+        <Text variant="bodySmall" style={styles.nationalNote}>
+          Preços de referência nacional (catálogo online) — nas lojas físicas podem variar por região.
+        </Text>
       </View>
 
       <Text variant="titleMedium" style={[styles.sectionTitle, { marginTop: 12 }]} accessibilityRole="header">Detalhes do Cabaz</Text>
@@ -546,6 +549,13 @@ const styles = StyleSheet.create({
   summaryScroll: {
     paddingHorizontal: 12,
     paddingBottom: 8,
+  },
+  nationalNote: {
+    color: colors.textMuted,
+    textAlign: 'center',
+    paddingHorizontal: 16,
+    marginTop: 2,
+    marginBottom: 4,
   },
   summaryCard: {
     width: 150,

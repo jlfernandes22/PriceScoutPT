@@ -357,6 +357,9 @@ O scraper marca como *esgotado* (`in_stock=false`) os produtos que deixaram de a
 **Porque é que o Auchan ainda não aparece na app?**
 O Auchan foi integrado recentemente; basta a próxima recolha diária correr para o catálogo popular (vê `/api/stats` para o `last_scraped_at` de cada supermercado).
 
+**Os preços variam por região?**
+Os preços aqui mostrados são de **referência nacional** — os catálogos online dos supermercados (e os folhetos do Lidl/Aldi) têm preços nacionais. Na loja física, os preços podem variar por região: segundo estudos da DECO, o **interior** tende a ser mais caro e os **Açores e a Madeira** são as regiões onde menos se poupa. A app mostra essa nota nos ecrãs de comparação e painel de controlo.
+
 **Quanto custa isto em produção?**
 0 € — escala-a-zero nos Container Apps (dorme quando não há pedidos), free tier do PostgreSQL e GitHub Actions gratuito.
 

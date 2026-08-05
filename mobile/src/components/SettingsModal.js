@@ -185,7 +185,9 @@ const SettingsModal = ({ visible, onDismiss }) => {
                 com catálogo offline-first e recolha diária automática no servidor.
               </Text>
               <Text variant="bodySmall" style={styles.disclaimer}>
-                Os preços são recolhidos dos sites públicos dos supermercados e podem variar.
+                Preços de referência nacional (catálogo online). Nas lojas físicas os preços podem variar por região
+                — nos Açores e na Madeira tendem a ser mais altos e o interior do país pode diferir do litoral.
+                Os folhetos (Lidl, Aldi) são válidos a nível nacional.
               </Text>
             </Surface>
           </ScrollView>
