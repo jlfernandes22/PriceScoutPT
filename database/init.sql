@@ -77,6 +77,10 @@ CREATE INDEX idx_products_active_updated_at ON products(updated_at) WHERE delete
 CREATE INDEX idx_products_deleted_out_of_stock_updated_at ON products(updated_at) WHERE deleted = true OR in_stock = false;
 CREATE INDEX idx_price_history_product_id ON price_history(product_id);
 CREATE INDEX idx_price_history_recorded_at ON price_history(recorded_at);
+-- Suporta o histórico de um produto (GET /api/products/:id): produto + janela
+-- de 30 dias + ordenação por data, tudo coberto por um único índice.
+CREATE INDEX idx_price_history_product_recorded
+  ON price_history(product_id, recorded_at DESC);
 -- Suportam o browe GET /api/products?category=...|supermarket=... ORDER BY name:
 -- o predicado de "ativo" é parcial, permitindo um index scan ordenado por name
 -- em vez de um sort a partir de um seq scan sobre os ~56k produtos.
