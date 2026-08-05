@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, memo } from 'react';
 import { View, StyleSheet, Image } from 'react-native';
 import { colors } from '../theme';
 import { Card, Text, IconButton, Badge } from 'react-native-paper';
@@ -41,6 +41,7 @@ export const ProductImage = ({ url, color, size }) => {
       source={{ uri: url }}
       style={{ width: size, height: size, borderRadius: 10 }}
       resizeMode="cover"
+      resizeMethod="resize"
       onError={() => setFailed(true)}
       accessible={false}
       importantForAccessibility="no-hide-descendants"
@@ -202,4 +203,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default ProductCard;
+export default memo(ProductCard);

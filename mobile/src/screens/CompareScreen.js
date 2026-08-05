@@ -350,7 +350,7 @@ const ComparisonDetails = ({ shoppingList, items, favoriteIds, onToggleFavorite 
             accessibilityHint={item.available ? 'Abre o histórico de preços do produto' : undefined}
           >
             {item.imageUrl ? (
-              <Image source={{ uri: item.imageUrl }} style={styles.itemThumb} resizeMode="cover" accessible={false} importantForAccessibility="no-hide-descendants" />
+              <Image source={{ uri: item.imageUrl }} style={styles.itemThumb} resizeMode="cover" resizeMethod="resize" accessible={false} importantForAccessibility="no-hide-descendants" />
             ) : (
               <View style={[styles.itemThumb, styles.itemThumbFallback, { backgroundColor: getSupermarket(item.supermarketId).color }]} accessible={false} importantForAccessibility="no-hide-descendants" />
             )}

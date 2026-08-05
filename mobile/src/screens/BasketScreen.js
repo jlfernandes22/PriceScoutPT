@@ -150,7 +150,7 @@ const BasketDetails = ({ shoppingList, items, favoriteIds, onToggleFavorite }) =
               accessibilityHint="Abre o histórico de preços do produto"
             >
               {r.product.imageUrl ? (
-                <Image source={{ uri: r.product.imageUrl }} style={styles.itemThumb} resizeMode="cover" accessible={false} importantForAccessibility="no-hide-descendants" />
+                <Image source={{ uri: r.product.imageUrl }} style={styles.itemThumb} resizeMode="cover" resizeMethod="resize" accessible={false} importantForAccessibility="no-hide-descendants" />
               ) : (
                 <View style={[styles.itemThumb, styles.itemThumbFallback, { backgroundColor: brandInfo.color, alignItems: 'center', justifyContent: 'center' }]} accessible={false} importantForAccessibility="no-hide-descendants" />
               )}

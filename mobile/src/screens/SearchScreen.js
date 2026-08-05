@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, memo } from 'react';
 import { View, StyleSheet, FlatList, ScrollView, Keyboard } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Searchbar, Text, IconButton, Portal, Dialog, Button, TextInput, RadioButton, Surface, Chip, Icon } from 'react-native-paper';
@@ -13,7 +13,7 @@ import { colors } from '../theme';
 
 const ALL_SUPERMARKETS = 'all';
 
-const ProductList = ({
+const ProductList = memo(function ProductList({
   products,
   categories,
   selectedSupermarket,
@@ -27,7 +27,7 @@ const ProductList = ({
   favoriteIds,
   onToggleFavorite,
   onLoadMore,
-}) => {
+}) {
   const [showAllCategories, setShowAllCategories] = useState(false);
 
   const visibleCategories = useMemo(() => {
@@ -36,14 +36,17 @@ const ProductList = ({
     return showAllCategories ? sorted : sorted.slice(0, 8);
   }, [categories, showAllCategories]);
 
-  const renderItem = ({ item }) => (
-    <ProductCard
-      product={item}
-      isFavorite={favoriteIds.has(item.id)}
-      onToggleFavorite={onToggleFavorite}
-      onAddToBasket={onAddToBasket}
-      onPress={() => onViewHistory(item)}
-    />
+  const renderItem = useCallback(
+    ({ item }) => (
+      <ProductCard
+        product={item}
+        isFavorite={favoriteIds.has(item.id)}
+        onToggleFavorite={onToggleFavorite}
+        onAddToBasket={onAddToBasket}
+        onPress={() => onViewHistory(item)}
+      />
+    ),
+    [favoriteIds, onToggleFavorite, onAddToBasket, onViewHistory]
   );
 
   return (
@@ -137,6 +140,10 @@ const ProductList = ({
         keyboardShouldPersistTaps="handled"
         onEndReached={onLoadMore}
         onEndReachedThreshold={0.5}
+        initialNumToRender={10}
+        maxToRenderPerBatch={12}
+        windowSize={7}
+        updateCellsBatchingPeriod={80}
         ListEmptyComponent={() => (
           <View style={styles.emptyContainer}>
             <IconButton icon="magnify-minus" size={60} iconColor={colors.borderStrong} />
@@ -151,7 +158,7 @@ const ProductList = ({
       />
     </View>
   );
-};
+});
 
 const PAGE_SIZE = 60;
 const MAX_LIST_RESULTS = 60000;
@@ -205,10 +212,10 @@ const SearchScreen = ({ shoppingLists, favorites, categories }) => {
 
   const [visibleLimit, setVisibleLimit] = useState(PAGE_SIZE);
 
-  const resetPagination = () => setVisibleLimit(PAGE_SIZE);
-  const handleLoadMore = () => {
+  const resetPagination = useCallback(() => setVisibleLimit(PAGE_SIZE), []);
+  const handleLoadMore = useCallback(() => {
     setVisibleLimit((prev) => Math.min(prev + PAGE_SIZE, MAX_LIST_RESULTS));
-  };
+  }, []);
 
   const favoriteIds = useMemo(() => {
     return new Set((favorites || []).map(f => f.productId));
@@ -231,7 +238,7 @@ const SearchScreen = ({ shoppingLists, favorites, categories }) => {
     setSearchTimer(setTimeout(() => setDebouncedQuery(query), 300));
   };
 
-  const handleSync = async (trigger = 'button') => {
+  const handleSync = useCallback(async (trigger = 'button') => {
     if (syncing) return;
     Keyboard.dismiss();
     setSyncing(true);
@@ -244,9 +251,9 @@ const SearchScreen = ({ shoppingLists, favorites, categories }) => {
       setSyncing(false);
       setSyncTrigger(null);
     }
-  };
+  }, [syncing]);
 
-  const openAddToBasketDialog = (product) => {
+  const openAddToBasketDialog = useCallback((product) => {
     setSelectedProduct(product);
     setQuantity(1);
     if (shoppingLists && shoppingLists.length > 0) {
@@ -257,7 +264,7 @@ const SearchScreen = ({ shoppingLists, favorites, categories }) => {
       setSelectedListId('new');
     }
     setIsDialogVisible(true);
-  };
+  }, [shoppingLists]);
 
   const handleSaveToBasket = async () => {
     if (!selectedProduct) return;
@@ -298,7 +305,7 @@ const SearchScreen = ({ shoppingLists, favorites, categories }) => {
     }
   };
 
-  const handleToggleFavorite = async (product, isFav) => {
+  const handleToggleFavorite = useCallback(async (product, isFav) => {
     try {
       await database.write(async () => {
         if (isFav) {
@@ -317,23 +324,23 @@ const SearchScreen = ({ shoppingLists, favorites, categories }) => {
     } catch (e) {
       console.error("[SearchScreen Favorite Error]:", e);
     }
-  };
+  }, []);
 
-  const handleViewHistory = (product) => {
+  const handleViewHistory = useCallback((product) => {
     setSelectedProductForHistory(product);
     setIsHistoryVisible(true);
-  };
+  }, []);
 
-  const handleChangeSupermarket = (id) => {
+  const handleChangeSupermarket = useCallback((id) => {
     setSelectedSupermarket(id);
     setSelectedCategoryId(null);
     resetPagination();
-  };
+  }, []);
 
-  const handleChangeCategory = (id) => {
+  const handleChangeCategory = useCallback((id) => {
     setSelectedCategoryId(id);
     resetPagination();
-  };
+  }, []);
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
