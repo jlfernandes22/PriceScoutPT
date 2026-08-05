@@ -69,6 +69,9 @@ const ProductHistoryModal = ({ product, visible, onDismiss, isFavorite, onToggle
   const unitText = product
     ? (unitInfo ? unitInfo.parsed.totalText : (product.unit && product.unit.trim() !== '' ? product.unit : null))
     : null;
+  const unitLabel = unitInfo
+    ? (unitInfo.label === '€/kg' ? 'Preço por kg' : unitInfo.label === '€/l' ? 'Preço por litro' : 'Preço por unidade')
+    : 'Preço por unidade';
 
   // Calcular estatísticas de preços
   const stats = useMemo(() => {
@@ -177,7 +180,7 @@ const ProductHistoryModal = ({ product, visible, onDismiss, isFavorite, onToggle
                   <Text variant="titleSmall" style={styles.unitValue}>{unitText}</Text>
                 </View>
                 <View style={styles.unitColRight}>
-                  <Text variant="bodySmall" style={styles.unitLabel}>Preço por unidade</Text>
+                  <Text variant="bodySmall" style={styles.unitLabel}>{unitLabel}</Text>
                   <Text variant="titleSmall" style={[styles.unitValue, { color: brandInfo.color }]}>
                     {unitInfo ? `${unitInfo.per.toFixed(2).replace('.', ',')} ${unitInfo.label}` : '—'}
                   </Text>
