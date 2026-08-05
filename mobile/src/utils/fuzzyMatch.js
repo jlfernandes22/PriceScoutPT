@@ -97,6 +97,34 @@ function significantTokens(name, brand, max = 3) {
     .slice(0, max);
 }
 
+// Variantes com um acento por posição, para a pesquisa LIKE casar com nomes
+// acentuados na BD ("camarao" -> "camarão", "pescanova" -> "pescanóva"...).
+// O SQLite LIKE é sensível a acentos; sem isto, tokens com vogais acentuadas
+// na BD nunca encontram candidatos ("Miolo de Camarão" não casa com "%camarao%").
+const ACCENTED = {
+  a: ['á', 'à', 'â', 'ã'],
+  e: ['é', 'è', 'ê'],
+  i: ['í', 'ì', 'î'],
+  o: ['ó', 'ò', 'ô', 'õ'],
+  u: ['ú', 'ù', 'û'],
+  c: ['ç'],
+};
+
+function likeVariants(token) {
+  const variants = [token];
+  const chars = token.split('');
+  for (let i = 0; i < chars.length; i++) {
+    const alts = ACCENTED[chars[i]];
+    if (!alts) continue;
+    for (const alt of alts) {
+      const v = chars.slice();
+      v[i] = alt;
+      variants.push(v.join(''));
+    }
+  }
+  return variants;
+}
+
 /**
  * Encontra a melhor correspondência de um produto num supermercado alvo,
  * resolvendo produtos com marcas/nomes distintos ("Miolo de Noz Pecan Continente"
@@ -109,16 +137,18 @@ export const findLocalFuzzyMatch = async (db, product, targetSupermarketId) => {
   }
 
   const srcTokens = contentTokens(product.name, product.brand);
-  const sig = significantTokens(product.name, product.brand, 2);
+  const sig = significantTokens(product.name, product.brand, 3);
 
   if (srcTokens.length === 0 || sig.length === 0) return null;
 
 // Pesquisar por tokens significativos (sem filtrar por marca — o maior erro do
 // matcher antigo, que impedia produtos de marca própria de serem comparados).
-// LIKE é sensível a acentos, por isso usam-se vários tokens para capturar pelo
-// menos um sem acentos.
-const orConds = sig.map((t) =>
-  Q.where('name', Q.like(`%${Q.sanitizeLikeString(t)}%`))
+// LIKE é sensível a acentos, por isso geram-se variantes acentuadas de cada
+// token para capturar nomes como "Camarão" quando o token é "camarao".
+const orConds = [...new Set(
+  sig.flatMap((t) => likeVariants(t))
+)].map((v) =>
+  Q.where('name', Q.like(`%${Q.sanitizeLikeString(v)}%`))
 );
 
   let candidates;
@@ -128,7 +158,7 @@ const orConds = sig.map((t) =>
       Q.where('deleted', false),
       Q.where('in_stock', true),
       Q.or(...orConds),
-      Q.take(300)
+      Q.take(500)
     ).fetch();
   } catch (e) {
     console.error("[findLocalFuzzyMatch Query Error]:", e);
