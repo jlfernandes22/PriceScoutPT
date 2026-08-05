@@ -1,0 +1,42 @@
+# ---- Environment & secrets ----
+.env
+.env.local
+*.env
+!.env.example
+
+# ---- Node / JS ----
+node_modules/
+dist/
+*.log
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+*.egg-info/
+
+# ---- React Native / Expo ----
+mobile/node_modules/
+mobile/.expo/
+mobile/dist/
+mobile/web-build/
+*.apk
+*.aab
+mobile/android/.gradle/
+mobile/android/local.properties
+mobile/android/build/
+mobile/android/**/build/
+mobile/android/.cxx/
+mobile/android/app/src/release/
+
+# ---- IDE / OS ----
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+
+# ---- Generated / large artifacts not needed in source ----
+repomix-output.xml

@@ -1,0 +1,63 @@
+services:
+  db:
+    image: postgres:15
+    container_name: pricescoutpt_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: pricescoutpt
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d pricescoutpt"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - '5433:5432'
+
+  api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    container_name: pricescoutpt_api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@db:5432/pricescoutpt
+      PORT: 3000
+    ports:
+      - '3000:3000'
+
+  scraper:
+    build:
+      context: ./scraper
+    container_name: pricescoutpt_scraper
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    profiles:
+      - tools
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@db:5432/pricescoutpt
+      DISCORD_WEBHOOK_URL: ${DISCORD_WEBHOOK_URL:-}
+      SLACK_WEBHOOK_URL: ${SLACK_WEBHOOK_URL:-}
+
+  adminer:
+    image: adminer:latest
+    container_name: pricescoutpt_adminer
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - '8080:8080'
+
+volumes:
+  postgres_data:

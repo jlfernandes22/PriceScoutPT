@@ -1,0 +1,42 @@
+{
+  "expo": {
+    "name": "PriceScoutPT",
+    "slug": "pricescoutpt",
+    "version": "1.0.0",
+    "sdkVersion": "54.0.0",
+    "platforms": ["ios", "android", "web"],
+    "orientation": "portrait",
+    "primaryColor": "#0050AA",
+    "icon": "./assets/icon.png",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0050AA"
+    },
+    "android": {
+      "package": "com.pricescoutpt.app",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0050AA"
+      }
+    },
+    "ios": {
+      "bundleIdentifier": "com.pricescoutpt.app",
+      "icon": "./assets/icon.png",
+      "supportsTablet": true
+    },
+    "extra": {
+      "apiBaseUrl": "http://localhost:3000",
+      "scrapeSecret": "",
+      "note": "Ajuste a URL acima conforme o ambiente: (1) USB via `adb reverse tcp:3000 tcp:3000` usa http://localhost:3000; (2) emulador Android usa http://10.0.2.2:3000; (3) telemovel fisico via Wi-Fi usa o IP do PC na LAN, ex: http://192.168.1.50:3000; (4) producao Azure usa a URL publica https://... Se deixar vazio, assume o fallback de desenvolvimento local. scrapeSecret: preencher apenas se o backend protegido; deve coincidir com SCRAPE_SECRET do deploy."
+    },
+    "buildProperties": {
+      "android": {
+        "newArchEnabled": true
+      },
+      "ios": {
+        "newArchEnabled": true
+      }
+    }
+  }
+}
