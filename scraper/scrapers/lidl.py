@@ -104,6 +104,10 @@ class LidlScraper(ScraperBase):
                 keyfacts = gdata.get('keyfacts') or {}
                 won_category = keyfacts.get('wonCategoryPrimary') or ''
 
+                # Sem preço na API = produto não comprável (esgotado) — nunca
+                # deve aparecer com 0.00€.
+                in_stock = price > 0
+
                 products.append({
                     'category_id': None,
                     'category_name': category.get('name'),
@@ -116,7 +120,7 @@ class LidlScraper(ScraperBase):
                     'unit': unit,
                     'url': urljoin(self.base_url, gdata.get('canonicalUrl', '')),
                     'image_url': image_url,
-                    'in_stock': True,
+                    'in_stock': in_stock,
                     'deleted': False,
                     'last_scraped_at': None,
                 })

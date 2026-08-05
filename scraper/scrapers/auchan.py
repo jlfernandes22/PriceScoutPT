@@ -147,6 +147,10 @@ class AuchanScraper(ScraperBase):
         price = 0.0
         category_name = category.get('name')
 
+        # Produtos indisponíveis no site têm a classe auc-product-unavailable e
+        # o data-gtm SEM campo price — nunca devem aparecer com preço 0.00€.
+        unavailable = 'auc-product-unavailable' in (tile.get('class') or [])
+
         if gtm:
             name = gtm.get('name') or gtm.get('item_name') or name
             brand = gtm.get('brand') or gtm.get('item_brand') or brand
@@ -168,6 +172,10 @@ class AuchanScraper(ScraperBase):
             if price == 0.0:
                 price = self._parse_price(self._text(price_el))
 
+        # Sem preço no tile = produto não comprável (indisponível/esgotado).
+        if price == 0.0:
+            unavailable = True
+
         return {
             'category_id': None,
             'category_name': category_name,
@@ -180,7 +188,7 @@ class AuchanScraper(ScraperBase):
             'unit': self._extract_unit(tile),
             'url': self._extract_url(tile),
             'image_url': self._extract_image(tile),
-            'in_stock': True,
+            'in_stock': not unavailable,
             'deleted': False,
             'last_scraped_at': None,
         }

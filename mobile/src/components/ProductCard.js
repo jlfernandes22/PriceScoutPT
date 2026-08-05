@@ -17,7 +17,8 @@ export const getSupermarket = (id) =>
 
 export const formatPrice = (price) => {
   const value = parseFloat(price);
-  return Number.isFinite(value) ? `${value.toFixed(2)} €` : '—';
+  // Preço 0/ausente = produto sem preço (indisponível) — nunca mostrar "0,00 €".
+  return Number.isFinite(value) && value > 0 ? `${value.toFixed(2)} €` : '—';
 };
 
 // Imagem do produto com fallback elegante para quando não existe imagem
