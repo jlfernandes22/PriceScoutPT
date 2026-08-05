@@ -15,6 +15,10 @@
 # Exemplo:
 #   ./deploy.sh pricescoutpt-rg westeurope pricescoutpt/api:v1
 #
+# Modo BYO database (recomendado se o free tier for criado no portal):
+#   DATABASE_URL="postgres://admin:pw@host:5432/postgres" \
+#   ./deploy.sh pricescoutpt-rg westeurope pricescoutpt/api:v1
+#
 # Nota: a imagem é publicada no Docker Hub (login via `docker login`).
 # =============================================================================
 set -euo pipefail
@@ -38,30 +42,38 @@ az extension add --name containerapp --only-show-errors --yes 2>/dev/null \
 echo "==> [1/5] A criar grupo de recursos: $RG ($REGION)"
 az group create --name "$RG" --location "$REGION" -o none
 
-echo "==> [2/5] A criar PostgreSQL Flexible Server (Free tier) + base de dados"
-az postgres flexible-server create \
-  --resource-group "$RG" \
-  --name "$DB_NAME" \
-  --location "$REGION" \
-  --admin-user "$DB_ADMIN" \
-  --admin-password "$DB_PASSWORD" \
-  --tier Burstable \
-  --sku-name Standard_B1ms \
-  --storage-size 32 \
-  --public-access any \
-  --version 15 \
-  -o none || echo "    (Se o free tier não estiver disponível, crie o servidor manualmente e passe DATABASE_URL)"
+# Modo "BYO database": se DATABASE_URL for passado como variável de ambiente,
+# reutiliza um servidor já existente (p.ex. criado no portal com o free tier)
+# e salta a criação + aplicação do schema (assume-se que já foi aplicado).
+if [ -n "${DATABASE_URL:-}" ]; then
+  echo "==> [2/5] A reutilizar a base de dados existente: $DATABASE_URL"
+  DB_CONN="$DATABASE_URL"
+else
+  echo "==> [2/5] A criar PostgreSQL Flexible Server (Free tier) + base de dados"
+  az postgres flexible-server create \
+    --resource-group "$RG" \
+    --name "$DB_NAME" \
+    --location "$REGION" \
+    --admin-user "$DB_ADMIN" \
+    --admin-password "$DB_PASSWORD" \
+    --tier Burstable \
+    --sku-name Standard_B1ms \
+    --storage-size 32 \
+    --public-access Enabled \
+    --version 15 \
+    -o none || echo "    (Se o free tier não estiver disponível, crie o servidor manualmente e passe DATABASE_URL)"
 
-DB_HOST="$(az postgres flexible-server show -g "$RG" -n "$DB_NAME" --query fullyQualifiedDomainName -o tsv)"
-DB_CONN="postgres://${DB_ADMIN}:${DB_PASSWORD}@${DB_HOST}:5432/postgres"
+  DB_HOST="$(az postgres flexible-server show -g "$RG" -n "$DB_NAME" --query fullyQualifiedDomainName -o tsv)"
+  DB_CONN="postgres://${DB_ADMIN}:${DB_PASSWORD}@${DB_HOST}:5432/postgres"
 
-echo "==> [3/5] A aplicar o schema (database/init.sql)"
-az postgres flexible-server execute \
-  --name "$DB_NAME" \
-  --resource-group "$RG" \
-  --admin-user "$DB_ADMIN" \
-  --admin-password "$DB_PASSWORD" \
-  --file-path "$(dirname "$0")/../../database/init.sql" -o none
+  echo "==> [3/5] A aplicar o schema (database/init.sql)"
+  az postgres flexible-server execute \
+    --name "$DB_NAME" \
+    --resource-group "$RG" \
+    --admin-user "$DB_ADMIN" \
+    --admin-password "$DB_PASSWORD" \
+    --file-path "$(dirname "$0")/../../database/init.sql" -o none
+fi
 
 echo "==> [4/5] A construir e publicar a imagem no Docker Hub"
 cd "$(dirname "$0")/../.."
