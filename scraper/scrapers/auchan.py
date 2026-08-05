@@ -177,13 +177,21 @@ class AuchanScraper(ScraperBase):
             'description': None,
             'price': price,
             'price_currency': 'EUR',
-            'unit': None,
+            'unit': self._extract_unit(tile),
             'url': self._extract_url(tile),
             'image_url': self._extract_image(tile),
             'in_stock': True,
             'deleted': False,
             'last_scraped_at': None,
         }
+
+    def _extract_unit(self, tile):
+        unit_el = tile.select_one('.auc-measures--price-per-unit, .pwc-tile--quantity, .product-quantity')
+        if unit_el:
+            unit_text = unit_el.get_text(strip=True)
+            if unit_text and not unit_text.lower().startswith('preço'):
+                return unit_text
+        return None
 
     def _text(self, element):
         return element.get_text(strip=True) if element else None

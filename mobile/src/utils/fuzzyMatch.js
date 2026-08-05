@@ -68,8 +68,13 @@ const MANDATORY_KEYWORDS = [
 
 export const getMandatoryKeyword = (name) => {
   const normalized = normalize(name);
-  return MANDATORY_KEYWORDS.find((kw) => normalized.includes(kw));
+  // Keywords guardadas SEM acentos: o normalize() remove acentos do nome do
+  // produto, pelo que literais acentuados ("amêijoa") nunca casariam.
+  return NORMALIZED_KEYWORDS.find((kw) => normalized.includes(kw));
 };
+
+// Versão normalizada (sem acentos) das palavras-chave obrigatórias.
+const NORMALIZED_KEYWORDS = MANDATORY_KEYWORDS.map(normalize);
 
 // Semelhança Jaccard sobre tokens de conteúdo significativos.
 export const getSimilarity = (name1, brand1, name2, brand2) => {

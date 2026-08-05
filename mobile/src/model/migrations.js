@@ -1,4 +1,4 @@
-import { schemaMigrations, createTable } from '@nozbe/watermelondb/Schema/migrations';
+import { schemaMigrations, createTable, unsafeExecuteSql } from '@nozbe/watermelondb/Schema/migrations';
 
 export default schemaMigrations({
   migrations: [
@@ -48,6 +48,22 @@ export default schemaMigrations({
             { name: 'updated_at', type: 'number' }
           ]
         })
+      ]
+    },
+    {
+      toVersion: 5,
+      steps: [
+        // Índices de leitura: a pesquisa e o fuzzy-match filtram por
+        // supermercado/categoria antes do LIKE no nome. Sem índice, cada
+        // query varre as ~93k linhas; com ele, só as do supermercado/categoria.
+        // (Nome igual ao que o WatermelonDB cria via isIndexed para instalações novas.
+        //  Nota: o runner nativo separa statements por ';' — obrigatório no fim.)
+        unsafeExecuteSql(
+          'CREATE INDEX IF NOT EXISTS products_supermarket_id ON products (supermarket_id);'
+        ),
+        unsafeExecuteSql(
+          'CREATE INDEX IF NOT EXISTS products_category_id ON products (category_id);'
+        ),
       ]
     }
   ]
