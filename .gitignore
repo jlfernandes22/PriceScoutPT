@@ -43,3 +43,7 @@ Thumbs.db
 
 # ---- Generated / large artifacts not needed in source ----
 repomix-output.xml
+api/repomix-output.xml
+
+# ---- Local build secrets (never commit) ----
+mobile/app.config.local.json
