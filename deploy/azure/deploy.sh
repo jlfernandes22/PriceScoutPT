@@ -30,6 +30,11 @@ DB_PASSWORD="$(openssl rand -base64 18 | tr -d '/+=' | cut -c1-20)"
 SCRAPE_SECRET="$(openssl rand -base64 24 | tr -d '/+=' | cut -c1-24)"
 DB_CONN=""
 
+# O comando 'az containerapp' passa por uma extensão — verifica/instala.
+echo "==> [0/5] A garantir a extensão Azure Container Apps"
+az extension add --name containerapp --only-show-errors --yes 2>/dev/null \
+  || az extension show -n containerapp -o none 2>/dev/null
+
 echo "==> [1/5] A criar grupo de recursos: $RG ($REGION)"
 az group create --name "$RG" --location "$REGION" -o none
 
