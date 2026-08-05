@@ -121,13 +121,28 @@ class DBManager:
             cur.execute("SELECT id, slug FROM canonical_categories")
             by_slug = {r[1]: r[0] for r in cur.fetchall()}
 
-            resolved = {}
-            for name in sorted(names):
-                canonical_slug = resolve_source_category(supermarket_slug, name) if supermarket_slug else None
-                resolved[name] = by_slug.get(canonical_slug or DEFAULT_CATEGORY_SLUG)
+        if not supermarket_slug:
+            fallback = by_slug.get(DEFAULT_CATEGORY_SLUG)
+            return {name: fallback for name in names}
+
+        resolved = {name: resolve_source_category(supermarket_slug, name) for name in names}
+        mapping = {}
+        unmatched = []
+        for name, slug in resolved.items():
+            cid = by_slug.get(slug)
+            if cid:
+                mapping[name] = cid
+            else:
+                unmatched.append(name)
+
+        if unmatched:
+            fallback = by_slug.get(DEFAULT_CATEGORY_SLUG)
+            for name in unmatched:
+                mapping[name] = fallback
+                print(f"  ⚠ Categoria de origem sem mapeamento: {name!r} -> {DEFAULT_CATEGORY_SLUG}")
 
         self._upsert_category_mappings(supermarket_id, resolved, by_slug)
-        return resolved
+        return mapping
 
     def _upsert_category_mappings(self, supermarket_id, resolved, by_slug):
         query = sql.SQL(
@@ -139,8 +154,9 @@ class DBManager:
             """
         )
         values = [
-            (supermarket_id, name, by_slug.get(resolved[name]))
-            for name in resolved
+            (supermarket_id, name, by_slug.get(slug))
+            for name, slug in resolved.items()
+            if by_slug.get(slug)
         ]
         if not values:
             return
