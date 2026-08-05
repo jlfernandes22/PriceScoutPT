@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { View, StyleSheet, ScrollView, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Portal, Modal, Surface, Text, IconButton, Divider, Card, Badge, ActivityIndicator } from 'react-native-paper';
+import { Portal, Modal, Surface, Text, IconButton, Icon, Divider, Card, Badge, ActivityIndicator } from 'react-native-paper';
 import { LineChart } from 'react-native-chart-kit';
 import axios from 'axios';
 import { useLocalFuzzyMatch } from '../utils/fuzzyMatch';
+import { computeUnitPrice } from '../utils/unitPrice';
 import { API_BASE_URL } from '../config';
 import { SUPERMARKET_BRANDS, getSupermarket, ProductImage } from './ProductCard';
 import { colors } from '../theme';
@@ -61,6 +62,13 @@ const ProductHistoryModal = ({ product, visible, onDismiss, isFavorite, onToggle
   }, [visible, product]);
 
   const brandInfo = product ? getSupermarket(product.supermarketId) : { name: '', color: colors.textMuted };
+
+  // Deteção de peso/volume/unidade e preço por unidade (€/kg, €/l, €/un)
+  // para comparar o valor real de produtos com pesos diferentes.
+  const unitInfo = product ? computeUnitPrice(product.price, product.unit, product.name) : null;
+  const unitText = product
+    ? (unitInfo ? unitInfo.parsed.totalText : (product.unit && product.unit.trim() !== '' ? product.unit : null))
+    : null;
 
   // Calcular estatísticas de preços
   const stats = useMemo(() => {
@@ -130,6 +138,7 @@ const ProductHistoryModal = ({ product, visible, onDismiss, isFavorite, onToggle
                 </Text>
                 <Text variant="bodySmall" style={styles.productBrand}>
                   {product.brand ? `Marca: ${product.brand}` : 'Marca própria/Genérico'}
+                  {product.unit && product.unit.trim() !== '' ? ` · ${product.unit}` : ''}
                 </Text>
               </View>
             </View>
@@ -158,6 +167,23 @@ const ProductHistoryModal = ({ product, visible, onDismiss, isFavorite, onToggle
                 <ProductImage url={product.imageUrl} color={brandInfo.color} size={170} />
               </View>
             </View>
+
+            {/* 0.5 Peso / Volume e Preço por Unidade */}
+            {unitText && (
+              <Surface style={styles.unitCard} elevation={1}>
+                <Icon icon="scale-balance" size={22} color={brandInfo.color} />
+                <View style={styles.unitColLeft}>
+                  <Text variant="bodySmall" style={styles.unitLabel}>Peso / Volume</Text>
+                  <Text variant="titleSmall" style={styles.unitValue}>{unitText}</Text>
+                </View>
+                <View style={styles.unitColRight}>
+                  <Text variant="bodySmall" style={styles.unitLabel}>Preço por unidade</Text>
+                  <Text variant="titleSmall" style={[styles.unitValue, { color: brandInfo.color }]}>
+                    {unitInfo ? `${unitInfo.per.toFixed(2).replace('.', ',')} ${unitInfo.label}` : '—'}
+                  </Text>
+                </View>
+              </Surface>
+            )}
 
             {/* 1. Indicadores de Preço */}
             <Text variant="titleSmall" style={styles.sectionTitle} accessibilityRole="header">Estatísticas (Últimos 30 dias)</Text>
@@ -349,6 +375,30 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     borderWidth: 3,
     overflow: 'hidden',
+  },
+  unitCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surfaceVariant,
+    borderRadius: 8,
+    padding: 12,
+    marginTop: 16,
+  },
+  unitColLeft: {
+    flex: 1,
+    marginLeft: 10,
+  },
+  unitColRight: {
+    alignItems: 'flex-end',
+  },
+  unitLabel: {
+    color: colors.textMuted,
+    fontSize: 11,
+  },
+  unitValue: {
+    fontWeight: 'bold',
+    color: colors.textSecondary,
+    marginTop: 2,
   },
   statsContainer: {
     flexDirection: 'row',
