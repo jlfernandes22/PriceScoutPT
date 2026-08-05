@@ -26,8 +26,8 @@
       "supportsTablet": true
     },
     "extra": {
-      "apiBaseUrl": "http://localhost:3000",
-      "scrapeSecret": "",
+      "apiBaseUrl": "https://pricescoutpt-api.yellowflower-63c75e19.northeurope.azurecontainerapps.io",
+      "scrapeSecret": "9k9MiwzsZ6z1YjVV3XcfpLwX",
       "note": "Ajuste a URL acima conforme o ambiente: (1) USB via `adb reverse tcp:3000 tcp:3000` usa http://localhost:3000; (2) emulador Android usa http://10.0.2.2:3000; (3) telemovel fisico via Wi-Fi usa o IP do PC na LAN, ex: http://192.168.1.50:3000; (4) producao Azure usa a URL publica https://... Se deixar vazio, assume o fallback de desenvolvimento local. scrapeSecret: preencher apenas se o backend protegido; deve coincidir com SCRAPE_SECRET do deploy."
     },
     "buildProperties": {
