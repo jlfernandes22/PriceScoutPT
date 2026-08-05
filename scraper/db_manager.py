@@ -23,7 +23,7 @@ class DBManager:
         last_exc = None
         for attempt in range(3):
             try:
-                self.conn = psycopg2.connect(self.dsn, connect_timeout=15)
+                self.conn = self._connect()
                 break
             except psycopg2.OperationalError as e:
                 last_exc = e
@@ -31,23 +31,40 @@ class DBManager:
                     _time.sleep(3 * (attempt + 1))
         else:
             raise last_exc
-        self.conn.autocommit = False
+
+    def _connect(self):
+        """Abre uma ligação com timeouts explícitos.
+
+        - `tcp_user_timeout` (libpq): se a rede "engolir" ACKs (ligação morta sem
+          erro visível), o SO fecha-a ao fim de 60s e a operação falha em vez de
+          ficar presa para sempre.
+        - `statement_timeout` (servidor): a BD do free tier é lenta; um statement
+          preso > 3 min é cancelado e o erro dispara a reconexão.
+        """
+        conn = psycopg2.connect(self.dsn, connect_timeout=15, tcp_user_timeout=60000)
+        with conn.cursor() as cur:
+            cur.execute("SET statement_timeout = 180000")
+        conn.commit()
+        return conn
 
     def _ensure_conn(self):
         """Reconecta se a ligação caiu (ex.: o servidor fecha-a sob carga no free
         tier). Sem isto, um único 'connection already closed' matava a recolha."""
         if self.conn is None or self.conn.closed:
-            self.conn = psycopg2.connect(self.dsn, connect_timeout=15)
-            self.conn.autocommit = False
+            self.conn = self._connect()
         return self.conn
 
     def _retry_write(self, fn):
-        """Executa fn(conn) com uma reconexão + retry caso a ligação caia a meio
-        da operação."""
+        """Executa fn(conn). Em caso de ligação morta OU timeout (rede a "engolir"
+        respostas, statement lento), força reconexão e tenta de novo uma vez."""
         try:
             fn(self._ensure_conn())
-        except psycopg2.InterfaceError:
-            self._ensure_conn()
+        except (psycopg2.InterfaceError, psycopg2.OperationalError):
+            try:
+                self.conn.close()
+            except Exception:
+                pass
+            self.conn = None
             fn(self._ensure_conn())
 
     def ensure_canonical_categories(self):
