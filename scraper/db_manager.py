@@ -17,7 +17,20 @@ class DBManager:
         self.dsn = dsn or os.environ.get('DATABASE_URL')
         if not self.dsn:
             raise ValueError('DATABASE_URL environment variable is required for DBManager.')
-        self.conn = psycopg2.connect(self.dsn, connect_timeout=15)
+        # Retry no arranque: redes de datacenter/domésticas são intermitentes;
+        # sem isto uma falha transitória matava a recolha antes de começar.
+        import time as _time
+        last_exc = None
+        for attempt in range(3):
+            try:
+                self.conn = psycopg2.connect(self.dsn, connect_timeout=15)
+                break
+            except psycopg2.OperationalError as e:
+                last_exc = e
+                if attempt < 2:
+                    _time.sleep(3 * (attempt + 1))
+        else:
+            raise last_exc
         self.conn.autocommit = False
 
     def _ensure_conn(self):
