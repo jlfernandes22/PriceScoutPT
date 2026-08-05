@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { View, StyleSheet, ScrollView, FlatList, Image } from 'react-native';
+import { View, StyleSheet, ScrollView, FlatList, Image, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text, IconButton, Chip, FAB, Surface, Divider, ActivityIndicator } from 'react-native-paper';
 import { Q } from '@nozbe/watermelondb';
@@ -139,7 +139,16 @@ const BasketDetails = ({ shoppingList, items, favoriteIds, onToggleFavorite }) =
           const brandInfo = getSupermarket(r.product.supermarketId);
           const subtotal = (parseFloat(r.product.price) || 0) * r.quantity;
           return (
-            <View style={styles.itemRow}>
+            <Pressable
+              style={({ pressed }) => [styles.itemRow, pressed && styles.itemRowPressed]}
+              onPress={() => {
+                setSelectedProductForHistory(r.product);
+                setIsHistoryVisible(true);
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={`Abrir detalhes de ${r.product.name}`}
+              accessibilityHint="Abre o histórico de preços do produto"
+            >
               {r.product.imageUrl ? (
                 <Image source={{ uri: r.product.imageUrl }} style={styles.itemThumb} resizeMode="cover" accessible={false} importantForAccessibility="no-hide-descendants" />
               ) : (
@@ -203,7 +212,7 @@ const BasketDetails = ({ shoppingList, items, favoriteIds, onToggleFavorite }) =
                 accessibilityLabel={`Remover ${r.product.name} do cabaz`}
                 hitSlop={8}
               />
-            </View>
+            </Pressable>
           );
         }}
         ItemSeparatorComponent={() => <Divider style={styles.rowDivider} />}
@@ -399,6 +408,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
     backgroundColor: colors.surface,
+  },
+  itemRowPressed: {
+    backgroundColor: colors.surfaceVariant,
   },
   itemThumb: {
     width: 44,

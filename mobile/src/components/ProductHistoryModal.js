@@ -6,7 +6,7 @@ import { LineChart } from 'react-native-chart-kit';
 import axios from 'axios';
 import { useLocalFuzzyMatch } from '../utils/fuzzyMatch';
 import { API_BASE_URL } from '../config';
-import { SUPERMARKET_BRANDS, getSupermarket } from './ProductCard';
+import { SUPERMARKET_BRANDS, getSupermarket, ProductImage } from './ProductCard';
 import { colors } from '../theme';
 
 const formatDate = (dateStr) => {
@@ -152,6 +152,13 @@ const ProductHistoryModal = ({ product, visible, onDismiss, isFavorite, onToggle
           </Surface>
 
           <ScrollView style={styles.scrollContainer} contentContainerStyle={styles.scrollContent}>
+            {/* 0. Imagem do Produto */}
+            <View style={styles.imageSection} accessible={false} importantForAccessibility="no-hide-descendants">
+              <View style={[styles.detailImageWrap, { borderColor: brandInfo.color }]}>
+                <ProductImage url={product.imageUrl} color={brandInfo.color} size={170} />
+              </View>
+            </View>
+
             {/* 1. Indicadores de Preço */}
             <Text variant="titleSmall" style={styles.sectionTitle} accessibilityRole="header">Estatísticas (Últimos 30 dias)</Text>
             <View style={styles.statsContainer}>
@@ -333,6 +340,15 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     marginTop: 16,
     marginBottom: 8,
+  },
+  imageSection: {
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  detailImageWrap: {
+    borderRadius: 18,
+    borderWidth: 3,
+    overflow: 'hidden',
   },
   statsContainer: {
     flexDirection: 'row',

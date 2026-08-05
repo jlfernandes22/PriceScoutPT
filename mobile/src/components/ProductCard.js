@@ -20,7 +20,7 @@ export const formatPrice = (price) => {
 };
 
 // Imagem do produto com fallback elegante para quando não existe imagem
-const ProductImage = ({ url, color, size }) => {
+export const ProductImage = ({ url, color, size }) => {
   const [failed, setFailed] = useState(false);
 
   if (!url || failed) {

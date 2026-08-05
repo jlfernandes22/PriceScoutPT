@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { View, StyleSheet, ScrollView, SectionList, Share, Image } from 'react-native';
+import { View, StyleSheet, ScrollView, SectionList, Share, Image, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text, IconButton, Button, Chip, Surface, Divider, Badge, ActivityIndicator, Card } from 'react-native-paper';
 import { Q } from '@nozbe/watermelondb';
@@ -169,8 +169,20 @@ const ComparisonDetails = ({ shoppingList, items, favoriteIds, onToggleFavorite 
     });
   }, [comparisonData, totals]);
 
-  const handleShareBasket = async () => {
-    if (!comparisonData || comparisonData.length === 0) {
+  const openHistory = async (item) => {
+    if (!item.available || !item.productId) return;
+    try {
+      const prod = await database.collections.get('products').find(item.productId);
+      if (prod) {
+        setSelectedProductForHistory(prod);
+        setIsHistoryVisible(true);
+      }
+    } catch (e) {
+      console.error("[CompareScreen fetch product for history error]:", e);
+    }
+  };
+
+  const handleShareBasket = async () => {    if (!comparisonData || comparisonData.length === 0) {
       alert("Adiciona produtos ao cabaz antes de partilhar.");
       return;
     }
@@ -307,7 +319,14 @@ const ComparisonDetails = ({ shoppingList, items, favoriteIds, onToggleFavorite 
           </Surface>
         )}
         renderItem={({ item }) => (
-          <View style={styles.itemRow}>
+          <Pressable
+            style={({ pressed }) => [styles.itemRow, item.available && pressed && styles.itemRowPressed]}
+            disabled={!item.available}
+            onPress={() => openHistory(item)}
+            accessibilityRole="button"
+            accessibilityLabel={item.available ? `Abrir detalhes de ${item.originalName}` : `${item.originalName}, indisponível`}
+            accessibilityHint={item.available ? 'Abre o histórico de preços do produto' : undefined}
+          >
             {item.imageUrl ? (
               <Image source={{ uri: item.imageUrl }} style={styles.itemThumb} resizeMode="cover" accessible={false} importantForAccessibility="no-hide-descendants" />
             ) : (
@@ -326,17 +345,7 @@ const ComparisonDetails = ({ shoppingList, items, favoriteIds, onToggleFavorite 
                     style={styles.infoIcon}
                     accessibilityLabel={`Histórico de preços de ${item.originalName}`}
                     hitSlop={8}
-                    onPress={async () => {
-                      try {
-                        const prod = await database.collections.get('products').find(item.productId);
-                        if (prod) {
-                          setSelectedProductForHistory(prod);
-                          setIsHistoryVisible(true);
-                        }
-                      } catch (e) {
-                        console.error("[CompareScreen fetch product for history error]:", e);
-                      }
-                    }}
+                    onPress={() => openHistory(item)}
                   />
                 )}
               </View>
@@ -356,7 +365,7 @@ const ComparisonDetails = ({ shoppingList, items, favoriteIds, onToggleFavorite 
                 <Text variant="bodyMedium" style={styles.itemUnavailable}>Indisponível</Text>
               )}
             </View>
-          </View>
+          </Pressable>
         )}
         ItemSeparatorComponent={() => <Divider style={styles.rowDivider} />}
         contentContainerStyle={styles.listContent}
@@ -605,6 +614,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
     backgroundColor: colors.surface,
+  },
+  itemRowPressed: {
+    backgroundColor: colors.surfaceVariant,
   },
   itemThumb: {
     width: 40,
