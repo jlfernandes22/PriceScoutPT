@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { View, StyleSheet, FlatList, ScrollView, Keyboard } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Searchbar, Text, ActivityIndicator, IconButton, Portal, Dialog, Button, TextInput, RadioButton, Surface, Chip, Icon } from 'react-native-paper';
+import { Searchbar, Text, IconButton, Portal, Dialog, Button, TextInput, RadioButton, Surface, Chip, Icon } from 'react-native-paper';
 import { Q } from '@nozbe/watermelondb';
 import withObservables from '@nozbe/with-observables';
 import { database } from '../model';
@@ -26,7 +26,6 @@ const ProductList = ({
   onViewHistory,
   favoriteIds,
   onToggleFavorite,
-  limit,
   onLoadMore,
 }) => {
   const [showAllCategories, setShowAllCategories] = useState(false);
@@ -138,11 +137,6 @@ const ProductList = ({
         keyboardShouldPersistTaps="handled"
         onEndReached={onLoadMore}
         onEndReachedThreshold={0.5}
-        ListFooterComponent={
-          products.length >= limit
-            ? <ActivityIndicator style={styles.listFooterLoader} color={colors.primary} />
-            : null
-        }
         ListEmptyComponent={() => (
           <View style={styles.emptyContainer}>
             <IconButton icon="magnify-minus" size={60} iconColor={colors.borderStrong} />
@@ -194,6 +188,7 @@ const SearchScreen = ({ shoppingLists, favorites, categories }) => {
   const [selectedSupermarket, setSelectedSupermarket] = useState(ALL_SUPERMARKETS);
   const [selectedCategoryId, setSelectedCategoryId] = useState(null);
   const [syncing, setSyncing] = useState(false);
+  const [syncTrigger, setSyncTrigger] = useState(null);
   const [searchTimer, setSearchTimer] = useState(null);
 
   const [isDialogVisible, setIsDialogVisible] = useState(false);
@@ -236,16 +231,18 @@ const SearchScreen = ({ shoppingLists, favorites, categories }) => {
     setSearchTimer(setTimeout(() => setDebouncedQuery(query), 300));
   };
 
-  const handleSync = async () => {
+  const handleSync = async (trigger = 'button') => {
     if (syncing) return;
     Keyboard.dismiss();
     setSyncing(true);
+    setSyncTrigger(trigger);
     try {
       await syncDatabase(database);
     } catch (e) {
       console.error("[Sync Screen Error]:", e);
     } finally {
       setSyncing(false);
+      setSyncTrigger(null);
     }
   };
 
@@ -354,8 +351,9 @@ const SearchScreen = ({ shoppingLists, favorites, categories }) => {
             icon="sync"
             mode="contained-tonal"
             size={22}
-            loading={syncing}
-            onPress={handleSync}
+            loading={syncing && syncTrigger === 'button'}
+            disabled={syncing}
+            onPress={() => handleSync('button')}
             style={styles.headerIcon}
             accessibilityLabel="Sincronizar catálogo"
             accessibilityState={{ busy: syncing }}
@@ -383,13 +381,6 @@ const SearchScreen = ({ shoppingLists, favorites, categories }) => {
         accessibilityHint="Escreve o nome de um produto para filtrar a lista"
       />
 
-      {syncing && (
-        <View style={styles.syncOverlay} accessibilityLiveRegion="polite">
-          <ActivityIndicator size="small" animating={true} style={styles.loader} />
-          <Text variant="bodySmall">A atualizar catálogo offline...</Text>
-        </View>
-      )}
-
       <EnhancedProductList
         searchTerm={debouncedQuery}
         categories={categories || []}
@@ -397,8 +388,8 @@ const SearchScreen = ({ shoppingLists, favorites, categories }) => {
         selectedCategoryId={selectedCategoryId}
         onSupermarketChange={handleChangeSupermarket}
         onCategoryChange={handleChangeCategory}
-        refreshing={syncing}
-        onRefresh={handleSync}
+        refreshing={syncing && syncTrigger === 'pull'}
+        onRefresh={() => handleSync('pull')}
         onAddToBasket={openAddToBasketDialog}
         onViewHistory={handleViewHistory}
         favoriteIds={favoriteIds}
@@ -558,16 +549,6 @@ const styles = StyleSheet.create({
     textAlignVertical: 'center',
     paddingVertical: 0,
   },
-  syncOverlay: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 6,
-    backgroundColor: colors.syncOverlay,
-  },
-  loader: {
-    marginRight: 8,
-  },
   filterBar: {
     paddingVertical: 4,
   },
@@ -587,9 +568,6 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 12,
     justifyContent: 'center',
-  },
-  listFooterLoader: {
-    paddingVertical: 20,
   },
   listContainer: {
     paddingHorizontal: 16,

@@ -19,7 +19,6 @@ export const colors = {
   textPrimary: '#111111',
   textSecondary: '#555555',
   textMuted: '#636363',
-  syncOverlay: '#E8F1FA',
   gold: '#FFD700',
 };
 

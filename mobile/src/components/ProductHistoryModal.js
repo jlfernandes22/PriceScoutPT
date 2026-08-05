@@ -263,7 +263,10 @@ const ProductHistoryModal = ({ product, visible, onDismiss, isFavorite, onToggle
             {/* 3. Comparação Cruzada (Offline) */}
             <Text variant="titleSmall" style={styles.sectionTitle} accessibilityRole="header">Preços Atuais na Concorrência (Offline)</Text>
             {crossLoading ? (
-              <ActivityIndicator size="small" color={colors.primary} style={{ marginVertical: 12 }} />
+              <Surface style={styles.chartPlaceholder} elevation={1}>
+                <ActivityIndicator size="small" color={colors.primary} />
+                <Text variant="bodyMedium" style={styles.placeholderText}>A procurar preços noutros supermercados...</Text>
+              </Surface>
             ) : (
               <Surface style={styles.crossContainer} elevation={1}>
                 {Object.entries(SUPERMARKET_BRANDS).map(([sId, brandData], index) => {
