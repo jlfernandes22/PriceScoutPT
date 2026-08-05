@@ -80,7 +80,15 @@ cd "$(dirname "$0")/../.."
 docker build -f api/Dockerfile -t "$IMAGE" .
 docker push "$IMAGE"
 
-echo "==> [5/5] A criar o Container App (plan gratuito / consumption)"
+echo "==> [5/5] A criar o ambiente e o Container App (plan gratuito / consumption)"
+# O plano consumption (gratuito) é o default do ambiente quando não se ativa
+# workload profiles — serve para fazer scale-to-zero com min-replicas 0.
+az containerapp env create \
+  --name "$RG-env" \
+  --resource-group "$RG" \
+  --location "$REGION" \
+  -o none
+
 az containerapp create \
   --name "$CA_NAME" \
   --resource-group "$RG" \
