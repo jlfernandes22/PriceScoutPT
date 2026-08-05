@@ -266,10 +266,10 @@ const styles = StyleSheet.create({
   },
   helpText: {
     color: colors.textMuted,
-    fontSize: 11,
+    fontSize: 12,
     marginTop: 4,
     marginBottom: 10,
-    lineHeight: 16,
+    lineHeight: 18,
     paddingHorizontal: 2,
   },
   actionButton: {
@@ -288,7 +288,7 @@ const styles = StyleSheet.create({
   },
   lastScrapeLabel: {
     color: colors.textMuted,
-    fontSize: 11,
+    fontSize: 12,
   },
   lastScrapeValue: {
     color: colors.textSecondary,
@@ -317,9 +317,9 @@ const styles = StyleSheet.create({
   },
   disclaimer: {
     color: colors.textMuted,
-    fontSize: 11,
+    fontSize: 12,
     marginTop: 10,
-    lineHeight: 16,
+    lineHeight: 18,
   },
   overlayBg: {
     flex: 1,

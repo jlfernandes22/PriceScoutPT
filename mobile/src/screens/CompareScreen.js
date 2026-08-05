@@ -588,7 +588,7 @@ const styles = StyleSheet.create({
   unavailableBadge: {
     backgroundColor: colors.dangerContainer,
     color: colors.warning,
-    fontSize: 10,
+    fontSize: 12,
     alignSelf: 'flex-start',
     borderRadius: 4,
     paddingHorizontal: 4,
@@ -677,7 +677,7 @@ const styles = StyleSheet.create({
   },
   itemPrice: {
     color: colors.textMuted,
-    fontSize: 12,
+    fontSize: 13,
   },
   itemSubtotal: {
     fontWeight: 'bold',
@@ -686,7 +686,7 @@ const styles = StyleSheet.create({
   },
   itemUnavailable: {
     color: colors.danger,
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '500',
   },
   emptyContainer: {

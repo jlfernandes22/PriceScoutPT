@@ -57,7 +57,7 @@ const ProductList = ({
             style={[styles.filterChip, { backgroundColor: selectedSupermarket === ALL_SUPERMARKETS ? colors.textPrimary : colors.surfaceVariant }]}
             selectedColor={colors.surface}
             showSelectedOverlay={false}
-            textStyle={{ color: selectedSupermarket === ALL_SUPERMARKETS ? colors.surface : colors.textSecondary, fontSize: 12 }}
+            textStyle={{ color: selectedSupermarket === ALL_SUPERMARKETS ? colors.surface : colors.textSecondary, fontSize: 13 }}
             accessibilityState={{ selected: selectedSupermarket === ALL_SUPERMARKETS }}
           >
             Todos
@@ -70,7 +70,7 @@ const ProductList = ({
               style={[styles.filterChip, { backgroundColor: selectedSupermarket === id ? info.color : colors.surfaceVariant }]}
               selectedColor={colors.surface}
               showSelectedOverlay={false}
-              textStyle={{ color: selectedSupermarket === id ? colors.surface : colors.textSecondary, fontSize: 12 }}
+              textStyle={{ color: selectedSupermarket === id ? colors.surface : colors.textSecondary, fontSize: 13 }}
               accessibilityState={{ selected: selectedSupermarket === id }}
             >
               {info.name}
@@ -91,7 +91,7 @@ const ProductList = ({
               compact
               selectedColor={colors.surface}
               showSelectedOverlay={false}
-              textStyle={{ fontSize: 11, color: !selectedCategoryId ? colors.surface : colors.textMuted }}
+              textStyle={{ fontSize: 12, color: !selectedCategoryId ? colors.surface : colors.textMuted }}
               accessibilityState={{ selected: !selectedCategoryId }}
             >
               Tudo
@@ -105,7 +105,7 @@ const ProductList = ({
                 compact
                 selectedColor={colors.surface}
                 showSelectedOverlay={false}
-                textStyle={{ fontSize: 11, color: selectedCategoryId === cat.id ? colors.surface : colors.textMuted }}
+                textStyle={{ fontSize: 12, color: selectedCategoryId === cat.id ? colors.surface : colors.textMuted }}
                 accessibilityState={{ selected: selectedCategoryId === cat.id }}
               >
                 {cat.name}
@@ -117,7 +117,7 @@ const ProductList = ({
                 onPress={() => setShowAllCategories((v) => !v)}
                 style={[styles.filterChip, { backgroundColor: colors.surfaceVariant }]}
                 compact
-                textStyle={{ fontSize: 11, color: colors.textMuted }}
+                textStyle={{ fontSize: 12, color: colors.textMuted }}
                 accessibilityState={{ selected: showAllCategories }}
               >
                 {showAllCategories ? 'Menos' : 'Mais'}
@@ -339,10 +339,10 @@ const SearchScreen = ({ shoppingLists, favorites, categories }) => {
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
         <View style={styles.headerTitleBlock}>
-          <Text variant="headlineSmall" style={styles.headerTitle} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} accessibilityRole="header">
+          <Text variant="headlineSmall" style={styles.headerTitle} numberOfLines={1} accessibilityRole="header">
             PriceScoutPT
           </Text>
-          <Text variant="bodySmall" style={styles.headerSubtitle} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
+          <Text variant="bodyMedium" style={styles.headerSubtitle} numberOfLines={1}>
             Compara preços dos supermercados portugueses
           </Text>
         </View>
@@ -525,7 +525,7 @@ const styles = StyleSheet.create({
   },
   headerSubtitle: {
     color: colors.textMuted,
-    fontSize: 12,
+    fontSize: 14,
   },
   headerActions: {
     flexDirection: 'row',

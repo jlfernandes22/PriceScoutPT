@@ -399,7 +399,7 @@ const styles = StyleSheet.create({
   },
   unitLabel: {
     color: colors.textMuted,
-    fontSize: 11,
+    fontSize: 12,
   },
   unitValue: {
     fontWeight: 'bold',
@@ -423,7 +423,7 @@ const styles = StyleSheet.create({
   },
   statLabel: {
     color: colors.textMuted,
-    fontSize: 11,
+    fontSize: 12,
     marginBottom: 4,
   },
   statValue: {
@@ -459,7 +459,7 @@ const styles = StyleSheet.create({
   },
   errorSubtext: {
     color: colors.textMuted,
-    fontSize: 12,
+    fontSize: 13,
     marginTop: 2,
   },
   crossContainer: {
@@ -494,7 +494,7 @@ const styles = StyleSheet.create({
   },
   crossProductName: {
     color: colors.textMuted,
-    fontSize: 12,
+    fontSize: 13,
     marginTop: 2,
   },
   crossPrice: {

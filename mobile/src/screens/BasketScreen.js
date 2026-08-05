@@ -454,7 +454,7 @@ const styles = StyleSheet.create({
   },
   itemUnitPrice: {
     color: colors.textMuted,
-    fontSize: 12,
+    fontSize: 13,
     marginTop: 3,
     flexShrink: 1,
   },
