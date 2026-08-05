@@ -56,10 +56,10 @@ O PriceScoutPT junta os catálogos online dos 5 principais supermercados portugu
 ## 🏗️ Arquitetura
 
 ```
-┌─────────────────┐  recolha diária (cron)  ┌──────────────────────┐
+┌─────────────────┐  recolha diária (cron) ┌──────────────────────┐
 │  Sites públicos │ ◄───────────────────── │  Scraper (Python)    │
-│  dos supermerc. │                         │  scraper/            │
-└─────────────────┘                         └──────────┬───────────┘
+│  dos supermerc. │                        │  scraper/            │
+└─────────────────┘                        └──────────┬───────────┘
                                                       │ bulk upsert
                                                       ▼
 ┌──────────────────┐   /api/sync (chunks)   ┌──────────────────────┐
