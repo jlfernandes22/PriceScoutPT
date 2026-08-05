@@ -8,8 +8,10 @@ from psycopg2.extras import execute_values
 # aguenta um único INSERT com 40k+ linhas (cada linha dispara o trigger
 # to_tsvector em pt-PT) — satura a CPU e o servidor fecha ligações. Lotes
 # pequenos mantêm cada statement leve e permitem progresso parcial.
-UPSERT_CHUNK_SIZE = 1000
-HISTORY_CHUNK_SIZE = 2000
+# 2000 por statement + commit por statement: equilíbrio entre round-trips
+# de rede (cada commit é uma ida ao servidor) e segurança de progresso.
+UPSERT_CHUNK_SIZE = 2000
+HISTORY_CHUNK_SIZE = 4000
 
 
 class DBManager:

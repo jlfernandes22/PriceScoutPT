@@ -38,6 +38,7 @@ export async function syncDatabase(database, options = {}) {
   let totalUpdated = 0;
   let totalDeleted = 0;
   let totalCategories = 0;
+  let fullRestartDone = false;
   let finalTimestamp = Date.now();
   let batchCount = 0;
 
@@ -57,7 +58,7 @@ export async function syncDatabase(database, options = {}) {
       throw new Error(`Erro na API de sincronização: Status ${response.status}`);
     }
 
-    const { changes, next_cursor, has_more, timestamp } = response.data;
+    const { changes, next_cursor, has_more, timestamp, truncated } = response.data;
     finalTimestamp = timestamp || finalTimestamp;
 
     const created = changes?.products?.created || [];
@@ -73,6 +74,18 @@ export async function syncDatabase(database, options = {}) {
           _unsafeBatchPerCollection: true,
         });
       });
+    }
+
+    // O servidor trunca os deltas além de 10.000 linhas por resposta. Sem isto,
+    // as atualizações mais antigas desse dia perder-se-iam para sempre (o cursor
+    // avançaria para além delas). Fazemos um pull completo (idempotente) para
+    // garantir consistência — raro, só em dias com muitas mudanças de preços.
+    if (truncated && !fullRestartDone) {
+      fullRestartDone = true;
+      console.log('[Sync] Delta truncado no servidor (>10k) — a refazer pull completo para não perder atualizações.');
+      lastPulledAtParam = new Date(0).toISOString();
+      cursor = null;
+      continue;
     }
 
     totalCreated += created.length;

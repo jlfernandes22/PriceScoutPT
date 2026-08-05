@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { View, StyleSheet, ScrollView, FlatList, Image, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Text, IconButton, Chip, FAB, Surface, Divider, ActivityIndicator } from 'react-native-paper';
+import { Text, IconButton, Chip, FAB, Surface, Divider, ActivityIndicator, Portal, Dialog, Button } from 'react-native-paper';
 import { Q } from '@nozbe/watermelondb';
 import withObservables from '@nozbe/with-observables';
 import { database } from '../model';
@@ -15,6 +15,7 @@ const BasketDetails = ({ shoppingList, items, favoriteIds, onToggleFavorite }) =
   const [resolvedItems, setResolvedItems] = useState(null);
   const [selectedProductForHistory, setSelectedProductForHistory] = useState(null);
   const [isHistoryVisible, setIsHistoryVisible] = useState(false);
+  const [clearDialogVisible, setClearDialogVisible] = useState(false);
 
   // Resolve o produto (nome/preço/supermercado) de cada item de forma reativa ao items.
   useEffect(() => {
@@ -79,6 +80,7 @@ const BasketDetails = ({ shoppingList, items, favoriteIds, onToggleFavorite }) =
   };
 
   const handleClearList = async () => {
+    setClearDialogVisible(false);
     try {
       await database.write(async () => {
         const itemsToDelete = await database.collections.get('shopping_list_items').query(
@@ -232,9 +234,24 @@ const BasketDetails = ({ shoppingList, items, favoriteIds, onToggleFavorite }) =
         icon="cart-remove"
         style={styles.fab}
         color={colors.surface}
-        onPress={handleClearList}
+        onPress={() => setClearDialogVisible(true)}
         label="Limpar Cabaz"
       />
+
+      <Portal>
+        <Dialog visible={clearDialogVisible} onDismiss={() => setClearDialogVisible(false)} style={{ backgroundColor: colors.surface }}>
+          <Dialog.Title>Limpar Cabaz</Dialog.Title>
+          <Dialog.Content>
+            <Text variant="bodyMedium">
+              Tem a certeza que pretende apagar todos os produtos desta lista de compras? Esta ação é irreversível.
+            </Text>
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button textColor={colors.textMuted} onPress={() => setClearDialogVisible(false)}>Cancelar</Button>
+            <Button textColor={colors.danger} onPress={handleClearList}>Limpar Tudo</Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
     </View>
   );
 };

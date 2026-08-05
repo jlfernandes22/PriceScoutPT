@@ -85,39 +85,48 @@ router.get('/', async (req, res) => {
     let deletedResult = { rows: [] };
     let categoriesResult = { rows: [] };
     if (!req.query.cursor) {
-      updatedResult = await db.query(
-        `SELECT id, supermarket_id, category_id, external_id, name, brand, description, price,
-                price_currency, unit, url, image_url, in_stock, deleted, created_at, updated_at
-         FROM products
-         WHERE updated_at >= $1
-           AND created_at < $1
-           AND (deleted = false OR deleted IS NULL)
-         ORDER BY updated_at ASC, id ASC
-         LIMIT ${MAX_LIMIT}`,
-        [threshold]
-      );
-
-      // 3. Fetch deleted products (strictly only rows flagged as deleted)
-      deletedResult = await db.query(
-        `SELECT id
-         FROM products
-         WHERE updated_at >= $1
-           AND deleted = true
-         ORDER BY updated_at ASC
-         LIMIT ${MAX_LIMIT}`,
-        [threshold]
-      );
-
-      // 4. Categorias (criadas/atualizadas desde o último pull)
-      categoriesResult = await db.query(
-        `SELECT id, name, slug, sort_order, created_at, updated_at
-         FROM canonical_categories
-         WHERE updated_at >= $1
-         ORDER BY sort_order ASC, id ASC
-         LIMIT ${MAX_LIMIT}`,
-        [threshold]
-      );
+      [updatedResult, deletedResult, categoriesResult] = await Promise.all([
+        db.query(
+          `SELECT id, supermarket_id, category_id, external_id, name, brand, description, price,
+                  price_currency, unit, url, image_url, in_stock, deleted, created_at, updated_at
+           FROM products
+           WHERE updated_at >= $1
+             AND created_at < $1
+             AND (deleted = false OR deleted IS NULL)
+           ORDER BY updated_at ASC, id ASC
+           LIMIT ${MAX_LIMIT}`,
+          [threshold]
+        ),
+        // 3. Fetch deleted products (strictly only rows flagged as deleted)
+        db.query(
+          `SELECT id
+           FROM products
+           WHERE updated_at >= $1
+             AND deleted = true
+           ORDER BY updated_at ASC
+           LIMIT ${MAX_LIMIT}`,
+          [threshold]
+        ),
+        // 4. Categorias (criadas/atualizadas desde o último pull)
+        db.query(
+          `SELECT id, name, slug, sort_order, created_at, updated_at
+           FROM canonical_categories
+           WHERE updated_at >= $1
+           ORDER BY sort_order ASC, id ASC
+           LIMIT ${MAX_LIMIT}`,
+          [threshold]
+        ),
+      ]);
     }
+
+    // Se um delta atingiu o limite (MAX_LIMIT), houve truncação: o cliente não
+    // receberia essas linhas (e o cursor de created não as cobre). Sinalizamos
+    // `truncated` para o cliente refazer um pull completo (idempotente), em vez
+    // de ficar com preços/estados desatualizados para sempre.
+    const truncated =
+      updatedResult.rows.length === MAX_LIMIT ||
+      deletedResult.rows.length === MAX_LIMIT ||
+      categoriesResult.rows.length === MAX_LIMIT;
 
     // 5. Calcular cursor para o próximo lote (apenas se o lote veio cheio)
     const createdRows = createdResult.rows;
@@ -145,6 +154,7 @@ router.get('/', async (req, res) => {
       timestamp: Date.now(),
       next_cursor: nextCursor,
       has_more: hasMore,
+      truncated: Boolean(truncated),
     };
 
     res.json(payload);

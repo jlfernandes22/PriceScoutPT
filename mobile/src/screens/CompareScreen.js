@@ -201,7 +201,8 @@ const ComparisonDetails = ({ shoppingList, items, favoriteIds, onToggleFavorite 
     }
   };
 
-  const handleShareBasket = async () => {    if (!comparisonData || comparisonData.length === 0) {
+  const handleShareBasket = async () => {
+    if (!comparisonData || comparisonData.length === 0) {
       alert("Adiciona produtos ao cabaz antes de partilhar.");
       return;
     }
