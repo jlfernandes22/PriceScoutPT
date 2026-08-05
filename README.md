@@ -82,7 +82,7 @@ O PriceScoutPT junta os catálogos online dos 5 principais supermercados portugu
 
 ## 📊 Estado atual
 
-**Base de dados de produção (Azure):** `57.021` produtos · `61.906` entradas de histórico · `19` categorias canónicas · `5` supermercados.
+**Base de dados de produção (Azure):** `93.558` produtos · `19` categorias canónicas · `5` supermercados.
 
 ---
 
