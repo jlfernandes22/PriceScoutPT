@@ -4,13 +4,38 @@ import psycopg2
 from psycopg2 import sql
 from psycopg2.extras import execute_values
 
+# Tamanho dos lotes de escrita. O free tier (B1ms, 1 vCPU burstable) não
+# aguenta um único INSERT com 40k+ linhas (cada linha dispara o trigger
+# to_tsvector em pt-PT) — satura a CPU e o servidor fecha ligações. Lotes
+# pequenos mantêm cada statement leve e permitem progresso parcial.
+UPSERT_CHUNK_SIZE = 1000
+HISTORY_CHUNK_SIZE = 2000
+
+
 class DBManager:
     def __init__(self, dsn=None):
         self.dsn = dsn or os.environ.get('DATABASE_URL')
         if not self.dsn:
             raise ValueError('DATABASE_URL environment variable is required for DBManager.')
-        self.conn = psycopg2.connect(self.dsn)
+        self.conn = psycopg2.connect(self.dsn, connect_timeout=15)
         self.conn.autocommit = False
+
+    def _ensure_conn(self):
+        """Reconecta se a ligação caiu (ex.: o servidor fecha-a sob carga no free
+        tier). Sem isto, um único 'connection already closed' matava a recolha."""
+        if self.conn is None or self.conn.closed:
+            self.conn = psycopg2.connect(self.dsn, connect_timeout=15)
+            self.conn.autocommit = False
+        return self.conn
+
+    def _retry_write(self, fn):
+        """Executa fn(conn) com uma reconexão + retry caso a ligação caia a meio
+        da operação."""
+        try:
+            fn(self._ensure_conn())
+        except psycopg2.InterfaceError:
+            self._ensure_conn()
+            fn(self._ensure_conn())
 
     def ensure_canonical_categories(self):
         """Garante que a taxonomia canónica existe na BD (idempotente)."""
@@ -28,12 +53,19 @@ class DBManager:
             """
         )
         values = [(name, slug, sort_order, now, now) for name, slug, sort_order in get_canonical_categories()]
+
+        def _run(conn):
+            with conn.cursor() as cur:
+                execute_values(cur, query.as_string(conn), values)
+            conn.commit()
+
         try:
-            with self.conn.cursor() as cur:
-                execute_values(cur, query.as_string(self.conn), values)
-            self.conn.commit()
+            self._retry_write(_run)
         except Exception:
-            self.conn.rollback()
+            try:
+                self._ensure_conn().rollback()
+            except Exception:
+                pass
             raise
 
     def resolve_category_ids(self, supermarket_id, category_names):
@@ -50,7 +82,8 @@ class DBManager:
 
         self.ensure_canonical_categories()
 
-        with self.conn.cursor() as cur:
+        conn = self._ensure_conn()
+        with conn.cursor() as cur:
             cur.execute("SELECT slug FROM supermarkets WHERE id = %s", (supermarket_id,))
             row = cur.fetchone()
             supermarket_slug = row[0] if row else None
@@ -58,28 +91,13 @@ class DBManager:
             cur.execute("SELECT id, slug FROM canonical_categories")
             by_slug = {r[1]: r[0] for r in cur.fetchall()}
 
-        if not supermarket_slug:
-            fallback = by_slug.get(DEFAULT_CATEGORY_SLUG)
-            return {name: fallback for name in names}
-
-        resolved = {name: resolve_source_category(supermarket_slug, name) for name in names}
-        mapping = {}
-        unmatched = []
-        for name, slug in resolved.items():
-            cid = by_slug.get(slug)
-            if cid:
-                mapping[name] = cid
-            else:
-                unmatched.append(name)
-
-        if unmatched:
-            fallback = by_slug.get(DEFAULT_CATEGORY_SLUG)
-            for name in unmatched:
-                mapping[name] = fallback
-                print(f"  ⚠ Categoria de origem sem mapeamento: {name!r} -> {DEFAULT_CATEGORY_SLUG}")
+            resolved = {}
+            for name in sorted(names):
+                canonical_slug = resolve_source_category(supermarket_slug, name) if supermarket_slug else None
+                resolved[name] = by_slug.get(canonical_slug or DEFAULT_CATEGORY_SLUG)
 
         self._upsert_category_mappings(supermarket_id, resolved, by_slug)
-        return mapping
+        return resolved
 
     def _upsert_category_mappings(self, supermarket_id, resolved, by_slug):
         query = sql.SQL(
@@ -91,18 +109,24 @@ class DBManager:
             """
         )
         values = [
-            (supermarket_id, name, by_slug.get(slug))
-            for name, slug in resolved.items()
-            if by_slug.get(slug)
+            (supermarket_id, name, by_slug.get(resolved[name]))
+            for name in resolved
         ]
         if not values:
             return
+
+        def _run(conn):
+            with conn.cursor() as cur:
+                execute_values(cur, query.as_string(conn), values)
+            conn.commit()
+
         try:
-            with self.conn.cursor() as cur:
-                execute_values(cur, query.as_string(self.conn), values)
-            self.conn.commit()
+            self._retry_write(_run)
         except Exception:
-            self.conn.rollback()
+            try:
+                self._ensure_conn().rollback()
+            except Exception:
+                pass
             raise
 
     def bulk_upsert_products(self, supermarket_id, products):
@@ -167,13 +191,25 @@ class DBManager:
             item.get('updated_at') or now,
         ) for item in products]
 
-        try:
-            with self.conn.cursor() as cur:
-                execute_values(cur, query.as_string(self.conn), values)
-            self.conn.commit()
-        except Exception:
-            self.conn.rollback()
-            raise
+        # Escrita em lotes: cada lote é um statement pequeno + commit. Se a BD
+        # do free tier ficar sobrecarregada e fechar a ligação, apenas o lote
+        # atual se perde — e a reconexão retoma nos seguintes.
+        for start in range(0, len(values), UPSERT_CHUNK_SIZE):
+            chunk = values[start:start + UPSERT_CHUNK_SIZE]
+
+            def _run(conn, chunk=chunk):
+                with conn.cursor() as cur:
+                    execute_values(cur, query.as_string(conn), chunk)
+                conn.commit()
+
+            try:
+                self._retry_write(_run)
+            except Exception:
+                try:
+                    self._ensure_conn().rollback()
+                except Exception:
+                    pass
+                raise
 
     def bulk_insert_price_history(self, price_records):
         if not price_records:
@@ -194,17 +230,26 @@ class DBManager:
             item.get('created_at') or now,
         ) for item in price_records]
 
-        try:
-            with self.conn.cursor() as cur:
-                execute_values(cur, query, values)
-            self.conn.commit()
-        except Exception:
-            self.conn.rollback()
-            raise
+        for start in range(0, len(values), HISTORY_CHUNK_SIZE):
+            chunk = values[start:start + HISTORY_CHUNK_SIZE]
+
+            def _run(conn, chunk=chunk):
+                with conn.cursor() as cur:
+                    execute_values(cur, query, chunk)
+                conn.commit()
+
+            try:
+                self._retry_write(_run)
+            except Exception:
+                try:
+                    self._ensure_conn().rollback()
+                except Exception:
+                    pass
+                raise
 
     def mark_missing_products(self, supermarket_id, scraped_external_ids):
-        try:
-            with self.conn.cursor() as cur:
+        def _run(conn):
+            with conn.cursor() as cur:
                 if scraped_external_ids:
                     # NOT EXISTS + unnest: evita uma lista de parâmetros gigante
                     # (o NOT IN com 44k ids do Continente satura o parser do
@@ -237,19 +282,31 @@ class DBManager:
                         """,
                         (supermarket_id,)
                     )
-            self.conn.commit()
+            conn.commit()
+
+        try:
+            self._retry_write(_run)
         except Exception:
-            self.conn.rollback()
+            try:
+                self._ensure_conn().rollback()
+            except Exception:
+                pass
             raise
 
     def prune_old_data(self) -> None:
-        try:
-            with self.conn.cursor() as cur:
+        def _run(conn):
+            with conn.cursor() as cur:
                 cur.execute("SELECT prune_price_history_older_than_30_days();")
-            self.conn.commit()
+            conn.commit()
+
+        try:
+            self._retry_write(_run)
             print("  ✓ Histórico de preços com mais de 30 dias podado com sucesso.")
         except Exception as e:
-            self.conn.rollback()
+            try:
+                self._ensure_conn().rollback()
+            except Exception:
+                pass
             print(f"  Erro ao podar dados antigos da BD: {e}")
             raise e
 
@@ -263,7 +320,7 @@ class DBManager:
         """
         counts = {}
         try:
-            with self.conn.cursor() as cur:
+            with self._ensure_conn().cursor() as cur:
                 cur.execute(query)
                 rows = cur.fetchall()
                 for name, count in rows:
@@ -273,6 +330,5 @@ class DBManager:
         return counts
 
     def close(self):
-        if self.conn:
+        if self.conn and not self.conn.closed:
             self.conn.close()
-

@@ -1,6 +1,6 @@
 # ☁️ Auditoria de produção — uso multi-utilizador no Azure (free tier)
 
-**Data:** 2026-08-05 · **Stack:** Azure Container Apps (0.5 CPU / 1.0 GiB, `min-replicas 0`, `max-replicas 1`) + PostgreSQL Flexible Server **B1ms** (free) · **Dados:** ~56.587 produtos / 61.461 histórico / 19 categorias / 4 supermercados.
+**Data:** 2026-08-05 · **Stack:** Azure Container Apps (0.5 CPU / 1.0 GiB, `min-replicas 0`, `max-replicas 1`) + PostgreSQL Flexible Server **B1ms** (free) · **Dados:** ~57.021 produtos / 61.906 histórico / 19 categorias / 5 supermercados.
 
 > **Atualização 2026-08-05:** a recolha passou a ser **diária e automática** (GitHub Actions às ~13:00 → `POST /api/scrape`). A app **não dispara recolhas** nem faz polling contínuo — apenas sincroniza e lê a hora da última recolha uma vez ao abrir o painel. Isto eliminou o consumo de pedidos do polling e a folga apertada do rate limit do `/api/scrape`.
 
@@ -17,7 +17,7 @@
 
 | Rota | Limite/min | Notas |
 |---|---|---|
-| `/api/sync` | 600 | Sincronização completa = ~12 pedidos (56.587 / 5.000 por lote) → **1% do limite**. |
+| `/api/sync` | 600 | Sincronização completa = ~12 pedidos (57.021 / 5.000 por lote) → **1% do limite**. |
 | `/api/products` | 300 | Pesquisa/browse. |
 | `/api/categories` | 300 | 1 pedido por arranque. |
 | `/api/scrape*` | **20** | Recolha diária = 1 POST (+ raros disparos manuais). Folga enorme. |
@@ -31,7 +31,7 @@ Sem polling contínuo, o consumo da app é mínimo:
 
 | Atividade | Pedidos |
 |---|---|
-| Sincronização (descarregar a recolha do dia) | ~12 (56.587 / 5.000 por lote) |
+| Sincronização (descarregar a recolha do dia) | ~12 (57.021 / 5.000 por lote) |
 | Abrir painel de controlo (última recolha) | 1 |
 | Pesquisas/favoritos/cabaz | 1-2/uso |
 | Recolha diária (GitHub Actions) | 1 POST/dia |

@@ -1,4 +1,5 @@
 const express = require('express');
+const compression = require('compression');
 const cors = require('cors');
 const syncRouter = require('./sync');
 const productsRouter = require('./products');
@@ -9,13 +10,44 @@ require('dotenv').config();
 const app = express();
 app.disable('x-powered-by');
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '256kb' }));
+// Gzip: o /api/sync devolve lotes de ~5000 produtos por resposta — comprimir
+// reduz a egress no free tier e o tempo de sync no telemóvel (JSON comprime
+// muito bem, tipicamente ~10x). O OkHttp do Android descomprime transparentemente.
+app.use(compression());
 
-// Cabeçalhos de segurança básicos (sem dependência extra de helmet)
+// Log estruturado de pedidos para observabilidade (método, caminho, status,
+// duração). Em produção o stdout é capturado pelos logs do container da Azure.
+app.use((req, res, next) => {
+  const start = process.hrtime.bigint();
+  res.on('finish', () => {
+    const ms = Number(process.hrtime.bigint() - start) / 1e6;
+    console.log(`${new Date().toISOString()} ${req.method} ${req.originalUrl} ${res.statusCode} ${ms.toFixed(1)}ms`);
+  });
+  next();
+});
+
+// A API corre atrás do proxy de ingress do Azure Container Apps. Sem isto, o
+// req.ip devolve sempre o IP do proxy (não o do cliente), o que faria com que o
+// rate-limit e a política de segurança tratassem TODOS os utilizadores como um
+// só — tornando a proteção por IP inócua e agregando todos num único balde.
+// 'trust proxy' = 1 confia apenas no primeiro hop (o proxy da Azure), sem abrir
+// portas a spoofing de headers de clientes remotos.
+app.set('trust proxy', 1);
+
+// Cabeçalhos de segurança (sem dependência extra de helmet)
 app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('Referrer-Policy', 'no-referrer');
+  res.setHeader('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'");
+  // HSTS apenas em HTTPS (não no http de dev local para não corromper o setup)
+  if (req.secure || req.headers['x-forwarded-proto'] === 'https') {
+    res.setHeader(
+      'Strict-Transport-Security',
+      'max-age=63072000; includeSubDomains; preload'
+    );
+  }
   next();
 });
 
@@ -57,8 +89,19 @@ app.use('/api/products', productsRouter);
 app.use('/api/categories', categoriesRouter);
 app.use('/api/scrape', scrapeRouter);
 
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+app.get('/api/health', async (req, res) => {
+  // Health check real: além de provar que o processo está vivo, reporta o estado
+  // da ligação à BD (usado pelos probes/liveness do Azure Container Apps).
+  let db = 'unknown';
+  try {
+    const dbmod = require('./db');
+    await dbmod.query('SELECT 1');
+    db = 'up';
+  } catch (e) {
+    db = 'down';
+    console.error('Health check db error:', e.message);
+  }
+  res.json({ status: 'ok', db, timestamp: new Date().toISOString() });
 });
 
 app.get('/api/stats', async (req, res) => {
@@ -88,6 +131,19 @@ app.get('/api/stats', async (req, res) => {
 });
 
 const port = process.env.PORT || 3000;
+
+// 404 JSON + handler de erros central (evita respostas HTML cruas a pedidos de
+// rotas desconhecidas e garante que erros não intencionais devolvem 500 JSON).
+app.use((req, res) => {
+  res.status(404).json({ error: 'Not found.' });
+});
+
+// eslint-disable-next-line no-unused-vars
+app.use((err, req, res, next) => {
+  console.error('Unhandled error:', err);
+  res.status(500).json({ error: 'Internal server error.' });
+});
+
 app.listen(port, () => {
   console.log(`PriceScoutPT API listening on port ${port}`);
 });

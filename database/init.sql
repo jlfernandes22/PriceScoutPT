@@ -77,6 +77,13 @@ CREATE INDEX idx_products_active_updated_at ON products(updated_at) WHERE delete
 CREATE INDEX idx_products_deleted_out_of_stock_updated_at ON products(updated_at) WHERE deleted = true OR in_stock = false;
 CREATE INDEX idx_price_history_product_id ON price_history(product_id);
 CREATE INDEX idx_price_history_recorded_at ON price_history(recorded_at);
+-- Suportam o browe GET /api/products?category=...|supermarket=... ORDER BY name:
+-- o predicado de "ativo" é parcial, permitindo um index scan ordenado por name
+-- em vez de um sort a partir de um seq scan sobre os ~56k produtos.
+CREATE INDEX idx_products_active_category_name
+  ON products(category_id, name) WHERE deleted = false AND in_stock = true;
+CREATE INDEX idx_products_active_supermarket_name
+  ON products(supermarket_id, name) WHERE deleted = false AND in_stock = true;
 
 CREATE INDEX idx_products_search_vector ON products USING GIN(search_vector);
 
@@ -117,7 +124,8 @@ VALUES
   ('00000000-0000-0000-0000-000000000001', 'Continente', 'continente'),
   ('00000000-0000-0000-0000-000000000002', 'Lidl', 'lidl'),
   ('00000000-0000-0000-0000-000000000003', 'Pingo Doce', 'pingo-doce'),
-  ('00000000-0000-0000-0000-000000000004', 'Aldi', 'aldi')
+  ('00000000-0000-0000-0000-000000000004', 'Aldi', 'aldi'),
+  ('00000000-0000-0000-0000-000000000005', 'Auchan', 'auchan')
 ON CONFLICT DO NOTHING;
 
 -- Taxonomia canónica (19 categorias globais)

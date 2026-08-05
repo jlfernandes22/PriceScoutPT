@@ -9,6 +9,7 @@ export const SUPERMARKET_BRANDS = {
   '00000000-0000-0000-0000-000000000002': { name: 'Lidl', color: '#0050AA' },
   '00000000-0000-0000-0000-000000000003': { name: 'Pingo Doce', color: '#2B8C3D' },
   '00000000-0000-0000-0000-000000000004': { name: 'Aldi', color: '#003A70' },
+  '00000000-0000-0000-0000-000000000005': { name: 'Auchan', color: '#E4002B' },
 };
 
 export const getSupermarket = (id) =>

@@ -1,9 +1,15 @@
 from abc import ABC, abstractmethod
+import time
+
 import requests
 
 class ScraperBase(ABC):
     def __init__(self, db_manager):
         self.db_manager = db_manager
+        # Erros de rede/extração acumulados durante a run. Se algum ocorrer, a
+        # run é considerada INCOMPLETA e o main.py NÃO marca produtos como
+        # esgotados (evita apagar catálogo numa recolha parcial por falha duma categoria).
+        self.scrape_errors = []
         self.session = requests.Session()
         self.user_agent = (
             'Mozilla/5.0 (X11; Linux x86_64) '
@@ -11,6 +17,26 @@ class ScraperBase(ABC):
             'Chrome/126.0.0.0 Safari/537.36'
         )
         self.session.headers.update({'User-Agent': self.user_agent})
+
+    def get_with_retry(self, url, params=None, timeout=30, attempts=3, backoff=2.0):
+        """GET com re-tentativas e backoff exponencial.
+
+        As recolhas diárias correm de madrugada em IPs de datacenter; redes e
+        sites de supermercados falham esporadicamente. Em vez de perder a
+        página e degradar a categoria, tenta novamente até `attempts` vezes.
+        Devolve a resposta ou lança a última exceção após esgotar as tentativas.
+        """
+        last_exc = None
+        for attempt in range(attempts):
+            try:
+                resp = self.session.get(url, params=params, timeout=timeout)
+                resp.raise_for_status()
+                return resp
+            except Exception as e:  # noqa: BLE001
+                last_exc = e
+                if attempt < attempts - 1:
+                    time.sleep(backoff * (attempt + 1))
+        raise last_exc
 
     @property
     @abstractmethod

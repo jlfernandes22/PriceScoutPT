@@ -37,7 +37,7 @@ const SCRAPE_SECRET = process.env.SCRAPE_SECRET;
 
 const SCRAPER_DIR = process.env.SCRAPER_DIR || path.resolve(__dirname, '../scraper');
 const SCRAPER_PYTHON = process.env.SCRAPER_PYTHON || 'python3';
-const VALID_SCRAPERS = ['Continente', 'Lidl', 'PingoDoce', 'Aldi'];
+const VALID_SCRAPERS = ['Continente', 'Lidl', 'PingoDoce', 'Aldi', 'Auchan'];
 
 // POST /api/scrape — dispara uma nova recolha de dados (fresca) em background
 // Protegido por SCRAPE_SECRET (opcional) para evitar abuso

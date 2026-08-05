@@ -30,43 +30,62 @@ const ComparisonDetails = ({ shoppingList, items, favoriteIds, onToggleFavorite 
 
       setLoading(true);
       try {
+        // Fetch de todos os produtos alvo em paralelo (I/O async independente).
+        const products = await Promise.all(
+          items.map((item) => item.product.fetch())
+        );
         const resolvedItems = [];
 
-        for (const item of items) {
-          const product = await item.product.fetch();
+        for (let i = 0; i < items.length; i++) {
+          const item = items[i];
+          const product = products[i];
           if (!product) continue;
 
-          const matches = {};
-
-          for (const sId of Object.keys(SUPERMARKET_BRANDS)) {
-            if (sId === product.supermarketId) {
-              matches[sId] = {
-                available: true,
-                price: parseFloat(product.price),
-                name: product.name,
-                id: product.id,
-                imageUrl: product.imageUrl,
-              };
-            } else {
+          // Lookups por supermercado em paralelo (antes eram sequenciais).
+          const supermarkets = Object.keys(SUPERMARKET_BRANDS);
+          const entries = await Promise.all(
+            supermarkets.map(async (sId) => {
+              if (sId === product.supermarketId) {
+                return [
+                  sId,
+                  {
+                    available: true,
+                    price: parseFloat(product.price),
+                    name: product.name,
+                    id: product.id,
+                    imageUrl: product.imageUrl,
+                  },
+                ];
+              }
               const match = await findLocalFuzzyMatch(database, product, sId);
               if (match) {
-                matches[sId] = {
-                  available: true,
-                  price: parseFloat(match.price),
-                  name: match.name,
-                  id: match.id,
-                  imageUrl: match.imageUrl,
-                };
-              } else {
-                matches[sId] = {
+                return [
+                  sId,
+                  {
+                    available: true,
+                    price: parseFloat(match.price),
+                    name: match.name,
+                    id: match.id,
+                    imageUrl: match.imageUrl,
+                  },
+                ];
+              }
+              return [
+                sId,
+                {
                   available: false,
                   price: 0,
                   name: 'Indisponível',
                   id: null,
                   imageUrl: null,
-                };
-              }
-            }
+                },
+              ];
+            })
+          );
+
+          const matches = {};
+          for (const [sId, value] of entries) {
+            matches[sId] = value;
           }
 
           resolvedItems.push({

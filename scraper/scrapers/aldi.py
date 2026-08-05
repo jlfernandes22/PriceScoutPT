@@ -30,11 +30,11 @@ class AldiScraper(ScraperBase):
         full_url = f"{self.base_url}{target_path}"
         
         try:
-            r = self.session.get(full_url, timeout=30)
-            if r.status_code != 200:
-                raise Exception(f"Falha ao carregar a página {full_url} (Status: {r.status_code})")
+            r = self.get_with_retry(full_url, timeout=30)
         except Exception as e:
+            err = f"Aldi (folheto estático): {e}"
             print(f"    [Fallback] Erro na URL estática do folheto: {e}. A tentar descobrir pelo index principal...")
+            self.scrape_errors.append(err)
             try:
                 # Fallback: tentar descobrir a URL do folheto no index principal
                 r_index = self.session.get(self.base_url, timeout=30)
@@ -61,7 +61,9 @@ class AldiScraper(ScraperBase):
                         print(f"    [Fallback] Encontrada URL dinâmica: {full_url}")
                         r = self.session.get(full_url, timeout=30)
             except Exception as e_fallback:
+                err = f"Aldi (folheto dinâmico): {e_fallback}"
                 print(f"    [Fallback] Falha ao descobrir folheto dinamicamente: {e_fallback}")
+                self.scrape_errors.append(err)
                 return []
 
         # 2. Extrair Next.js props de __NEXT_DATA__ para obter a URL iPaper
@@ -78,12 +80,14 @@ class AldiScraper(ScraperBase):
             
             print(f"    URL do Visualizador iPaper: {leaflet_url}")
         except Exception as e:
+            err = f"Aldi (parse __NEXT_DATA__): {e}"
             print(f"    Erro ao analisar __NEXT_DATA__: {e}")
+            self.scrape_errors.append(err)
             return []
 
         # 3. Obter a página do visualizador iPaper e ler o window.staticSettings
         try:
-            r_viewer = self.session.get(leaflet_url, timeout=30)
+            r_viewer = self.get_with_retry(leaflet_url, timeout=30)
             if r_viewer.status_code != 200:
                 raise Exception(f"Falha ao aceder ao visualizador iPaper (Status: {r_viewer.status_code})")
             
@@ -98,7 +102,9 @@ class AldiScraper(ScraperBase):
             
             print(f"    Folheto carregado: {len(page_texts)} páginas encontradas.")
         except Exception as e:
+            err = f"Aldi (dados iPaper): {e}"
             print(f"    Erro ao extrair dados do iPaper: {e}")
+            self.scrape_errors.append(err)
             return []
 
         # 4. Processar o texto de cada página e extrair os produtos de forma resiliente

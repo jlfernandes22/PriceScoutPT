@@ -60,11 +60,12 @@ class LidlScraper(ScraperBase):
                 'category.id': api_id,
             }
             try:
-                response = self.session.get(self.api_url, params=params, timeout=30)
-                response.raise_for_status()
+                response = self.get_with_retry(self.api_url, params=params, timeout=30)
                 data = response.json()
             except Exception as e:
+                err = f"Lidl ({category['name']}, offset {offset}): {e}"
                 print(f"    Erro de rede na página (offset {offset}): {e}")
+                self.scrape_errors.append(err)
                 break
 
             items = data.get('items') or []

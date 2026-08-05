@@ -25,5 +25,8 @@ export const SCRAPE_SECRET = (scrapeSecret && scrapeSecret.trim() !== '')
   ? scrapeSecret.trim()
   : '';
 
-console.log(`[Config] API_BASE_URL configurado para: ${API_BASE_URL}`);
-console.log(`[Config] SCRAPE_SECRET configurado: ${SCRAPE_SECRET ? 'sim' : 'não'}`);
+// Logs apenas em desenvolvimento (nunca em builds de produção/Play Store).
+if (__DEV__) {
+  console.log(`[Config] API_BASE_URL configurado para: ${API_BASE_URL}`);
+  console.log(`[Config] SCRAPE_SECRET configurado: ${SCRAPE_SECRET ? 'sim' : 'não'}`);
+}

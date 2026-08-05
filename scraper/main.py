@@ -9,6 +9,7 @@ from scrapers.continente import ContinenteScraper
 from scrapers.lidl import LidlScraper
 from scrapers.pingodoce import PingoDoceScraper
 from scrapers.aldi import AldiScraper
+from scrapers.auchan import AuchanScraper
 
 load_dotenv()
 
@@ -16,6 +17,9 @@ load_dotenv()
 def run_scraper(scraper, errors_list) -> int:
     all_products = []
     scraper_failed = False
+    # Nova run: limpar erros de recolhas anteriores (por scraper) para que a
+    # decisão de "marcar como esgotado" reflita APENAS esta execução.
+    scraper.scrape_errors = []
     try:
         print(f'Running scraper: {scraper.__class__.__name__}')
 
@@ -59,8 +63,10 @@ def run_scraper(scraper, errors_list) -> int:
         scraper.sync_to_db(all_products)
 
         # Marcar como esgotados os produtos que deixaram de ser encontrados,
-        # apenas quando a run do scraper foi completa (sem erros de rede).
-        if all_products and not scraper_failed:
+        # apenas quando a run do scraper foi COMPLETA (sem erros de rede E sem
+        # exceções). Uma recolha parcial (ex: categoria que falhou a meio) não
+        # deve apagar produtos que simplesmente não chegaram a ser recolhidos.
+        if all_products and not scraper_failed and not scraper.scrape_errors:
             external_ids = [p['external_id'] for p in all_products if p.get('external_id')]
             scraper.mark_missing(external_ids)
             print(f'  ✓ Produtos ausentes marcados como esgotados.')
@@ -167,6 +173,7 @@ if __name__ == '__main__':
         'Lidl': LidlScraper(db_manager),
         'PingoDoce': PingoDoceScraper(db_manager),
         'Aldi': AldiScraper(db_manager),
+        'Auchan': AuchanScraper(db_manager),
     }
 
     if args.scrapers:

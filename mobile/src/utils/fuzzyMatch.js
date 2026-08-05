@@ -185,32 +185,47 @@ export const useLocalFuzzyMatch = (product) => {
       try {
         const result = {};
 
-        for (const sId of Object.keys(SUPERMARKET_BRANDS)) {
-          if (sId === product.supermarketId) {
-            result[sId] = {
-              available: true,
-              price: parseFloat(product.price),
-              name: product.name,
-              id: product.id,
-            };
-          } else {
+        // Corridas em paralelo — fazer os 4-5 lookups de supermercado em
+        // sequência duplica 4-5x a latência no ecrã. Nenhum depende do outro.
+        const supermarkets = Object.keys(SUPERMARKET_BRANDS);
+        const entries = await Promise.all(
+          supermarkets.map(async (sId) => {
+            if (sId === product.supermarketId) {
+              return [
+                sId,
+                {
+                  available: true,
+                  price: parseFloat(product.price),
+                  name: product.name,
+                  id: product.id,
+                },
+              ];
+            }
             const match = await findLocalFuzzyMatch(database, product, sId);
             if (match) {
-              result[sId] = {
-                available: true,
-                price: parseFloat(match.price),
-                name: match.name,
-                id: match.id,
-              };
-            } else {
-              result[sId] = {
+              return [
+                sId,
+                {
+                  available: true,
+                  price: parseFloat(match.price),
+                  name: match.name,
+                  id: match.id,
+                },
+              ];
+            }
+            return [
+              sId,
+              {
                 available: false,
                 price: 0,
                 name: 'Indisponível',
                 id: null,
-              };
-            }
-          }
+              },
+            ];
+          })
+        );
+        for (const [sId, value] of entries) {
+          result[sId] = value;
         }
 
         if (isMounted) {

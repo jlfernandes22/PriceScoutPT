@@ -10,6 +10,17 @@ router.get('/compare', async (req, res) => {
   }
 
   try {
+    // plainto_tsquery devolve uma tsquery vazia quando o input são só stopwords
+    // ("o de a") — e uma tsquery vazia casa com TODOS os vectores, devolvendo
+    // resultados arbitrários. Detecta isso via numnode() e devolve vazio.
+    const guard = await db.query(
+      `SELECT numnode(plainto_tsquery('pg_catalog.portuguese', $1)) AS n`,
+      [name]
+    );
+    if (Number(guard.rows[0].n) === 0) {
+      return res.json([]);
+    }
+
     const compareResult = await db.query(
       `SELECT p.id, p.supermarket_id, s.name AS supermarket_name, s.slug AS supermarket_slug,
               p.category_id, c.name AS category_name, p.external_id, p.name, p.brand,

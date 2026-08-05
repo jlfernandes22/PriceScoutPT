@@ -67,10 +67,12 @@ class PingoDoceScraper(ScraperBase):
                 'sz': self.page_size,
             }
             try:
-                res = self.session.get(self.ajax_url, params=params, timeout=30)
+                res = self.get_with_retry(self.ajax_url, params=params, timeout=30)
                 html = res.text
             except Exception as e:
+                err = f"PingoDoce ({category['name']}, pág {page_num}): {e}"
                 print(f"    Erro de rede na página {page_num}: {e}")
+                self.scrape_errors.append(err)
                 break
 
             soup = BeautifulSoup(html, 'html.parser')

@@ -101,10 +101,11 @@ class ContinenteScraper(ScraperBase):
                 'sz': self.page_size,
             }
             try:
-                response = self.session.get(self.ajax_url, params=params, timeout=30)
-                response.raise_for_status()
+                response = self.get_with_retry(self.ajax_url, params=params, timeout=30)
             except Exception as e:
+                err = f"Continente ({category['name']}, pág {page_num}): {e}"
                 print(f"    Erro de rede na página {page_num}: {e}")
+                self.scrape_errors.append(err)
                 break
 
             html = response.text

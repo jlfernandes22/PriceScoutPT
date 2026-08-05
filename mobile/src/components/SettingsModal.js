@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, Modal as RNModal } from 'react-native';
 import { Portal, Modal, Dialog, Surface, Text, IconButton, Divider, Button, ActivityIndicator } from 'react-native-paper';
 import axios from 'axios';
+import Constants from 'expo-constants';
 import { database } from '../model';
 import { colors } from '../theme';
 import { API_BASE_URL } from '../config';
@@ -13,6 +14,8 @@ const formatLastScrape = (iso) => {
   const pad = (n) => String(n).padStart(2, '0');
   return `${pad(d.getDate())}/${pad(d.getMonth() + 1)} às ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
+
+const appVersion = Constants.expoConfig?.version || '1.0.0';
 
 const SettingsModal = ({ visible, onDismiss }) => {
   const [loading, setLoading] = useState(false);
@@ -176,9 +179,9 @@ const SettingsModal = ({ visible, onDismiss }) => {
             {/* Secção Sobre */}
             <Text variant="titleSmall" style={styles.sectionLabel}>Sobre a Aplicação</Text>
             <Surface style={styles.aboutCard} elevation={1}>
-              <Text variant="titleMedium" style={styles.aboutTitle}>PriceScoutPT v1.2.0</Text>
+              <Text variant="titleMedium" style={styles.aboutTitle}>PriceScoutPT v{appVersion}</Text>
               <Text variant="bodyMedium" style={styles.aboutCredits}>
-                Comparador de preços de supermercados em Portugal (Continente, Lidl, Pingo Doce, Aldi)
+                Comparador de preços de supermercados em Portugal (Continente, Lidl, Pingo Doce, Aldi, Auchan)
                 com catálogo offline-first e recolha diária automática no servidor.
               </Text>
               <Text variant="bodySmall" style={styles.disclaimer}>

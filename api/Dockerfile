@@ -19,9 +19,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY scraper/requirements.txt /tmp/scraper-requirements.txt
 RUN pip install --no-cache-dir -r /tmp/scraper-requirements.txt
 
-# Dependências da API Node.js
+# Dependências da API Node.js (npm ci com lockfile → builds reproduzíveis)
 COPY api/package.json ./
-RUN npm install --production
+COPY api/package-lock.json ./
+RUN npm ci --omit=dev
 
 # Código
 COPY api ./
@@ -30,6 +31,16 @@ COPY scraper ./scraper
 ENV SCRAPER_DIR=/usr/src/app/scraper
 ENV SCRAPER_PYTHON=python
 ENV NODE_ENV=production
+
+# Executar como utilizador não privilegiado (segurança: o processo não tem
+# permissões de escrita no filesystem, limitando o impacto de uma vulnerabilidade).
+RUN useradd --create-home --uid 10001 appuser && \
+    chown -R appuser:appuser /usr/src/app
+USER appuser
+
+# Healthcheck usado pelo Azure Container Apps (substitui o TCP-only default).
+HEALTHCHECK --interval=30s --timeout=3s --start-period=15s --retries=3 \
+  CMD curl -fsS http://127.0.0.1:3000/api/health || exit 1
 
 EXPOSE 3000
 CMD ["npm", "start"]
