@@ -384,7 +384,7 @@ const SearchScreen = ({ shoppingLists, favorites, categories }) => {
       />
 
       {syncing && (
-        <View style={styles.syncOverlay} accessibilityRole="status" accessibilityLiveRegion="polite">
+        <View style={styles.syncOverlay} accessibilityLiveRegion="polite">
           <ActivityIndicator size="small" animating={true} style={styles.loader} />
           <Text variant="bodySmall">A atualizar catálogo offline...</Text>
         </View>
@@ -552,10 +552,11 @@ const styles = StyleSheet.create({
     elevation: 2,
     backgroundColor: colors.surface,
     borderRadius: 12,
-    height: 46,
   },
   searchbarInput: {
     fontSize: 14,
+    textAlignVertical: 'center',
+    paddingVertical: 0,
   },
   syncOverlay: {
     flexDirection: 'row',

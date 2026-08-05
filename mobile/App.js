@@ -14,6 +14,12 @@ import BasketScreen from './src/screens/BasketScreen';
 import OnboardingScreen from './src/screens/OnboardingScreen';
 
 export default function App() {
+  return (
+    <AppContent />
+  );
+}
+
+function AppContent() {
   const [isLoading, setIsLoading] = useState(true);
   const [hasOnboarded, setHasOnboarded] = useState(false);
   const [syncProgress, setSyncProgress] = useState(null);

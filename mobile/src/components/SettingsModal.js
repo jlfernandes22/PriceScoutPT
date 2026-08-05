@@ -1,80 +1,55 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { View, StyleSheet, Modal as RNModal, ScrollView } from 'react-native';
-import { Portal, Modal, Dialog, Surface, Text, IconButton, Divider, Button, ActivityIndicator, Chip } from 'react-native-paper';
+import React, { useEffect, useState } from 'react';
+import { View, StyleSheet, Modal as RNModal } from 'react-native';
+import { Portal, Modal, Dialog, Surface, Text, IconButton, Divider, Button, ActivityIndicator } from 'react-native-paper';
+import axios from 'axios';
 import { database } from '../model';
 import { colors } from '../theme';
+import { API_BASE_URL } from '../config';
 import { syncDatabase } from '../services/sync';
-import { API_BASE_URL, SCRAPE_SECRET } from '../config';
-import axios from 'axios';
 
-const ALL_SCRAPERS = ['Continente', 'Lidl', 'PingoDoce', 'Aldi'];
+const formatLastScrape = (iso) => {
+  if (!iso) return 'Ainda sem recolha registada.';
+  const d = new Date(iso);
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${pad(d.getDate())}/${pad(d.getMonth() + 1)} às ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
 
 const SettingsModal = ({ visible, onDismiss }) => {
   const [loading, setLoading] = useState(false);
   const [loadingText, setLoadingText] = useState('');
+  const [syncingNow, setSyncingNow] = useState(false);
+  const [lastScrapeAt, setLastScrapeAt] = useState(null);
   const [resetDialogVisible, setResetDialogVisible] = useState(false);
   const [clearDialogVisible, setClearDialogVisible] = useState(false);
 
-  // Estado do re-scrape sob demanda
-  const [selectedScrapers, setSelectedScrapers] = useState(ALL_SCRAPERS);
-  const [scrapeJob, setScrapeJob] = useState(null);
-  const [scrapeRunning, setScrapeRunning] = useState(false);
-  const pollTimer = useRef(null);
-
+  // A recolha diária corre no servidor (agendada às ~13:00). O botão só
+  // descarrega os dados mais recentes; a hora da última recolha lê-se uma vez
+  // ao abrir o painel (sem polling contínuo).
   useEffect(() => {
-    if (!visible) {
-      setScrapeJob(null);
-      setScrapeRunning(false);
-      if (pollTimer.current) clearInterval(pollTimer.current);
-    }
+    if (!visible) return;
+    let cancelled = false;
+    axios
+      .get(`${API_BASE_URL}/api/scrape/status`, { timeout: 10000 })
+      .then((res) => {
+        if (!cancelled) setLastScrapeAt(res.data.last_scrape_at || null);
+      })
+      .catch(() => {
+        if (!cancelled) setLastScrapeAt(null);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [visible]);
 
-  const toggleScraper = (name) => {
-    setSelectedScrapers((prev) =>
-      prev.includes(name) ? prev.filter((s) => s !== name) : [...prev, name]
-    );
-  };
-
-  // Disparar recolha fresca no servidor (POST /api/scrape)
-  const handleScrape = async () => {
-    if (scrapeRunning) return;
-    setScrapeRunning(true);
-    setScrapeJob({ status: 'running', scrapers: selectedScrapers, log_tail: [] });
+  const handleSync = async () => {
+    if (syncingNow) return;
+    setSyncingNow(true);
     try {
-      const response = await axios.post(`${API_BASE_URL}/api/scrape`, {
-        scrapers: selectedScrapers,
-      }, {
-        timeout: 15000,
-        headers: SCRAPE_SECRET ? { 'x-scrape-secret': SCRAPE_SECRET } : {},
-      });
-      const { job_id } = response.data;
-      pollTimer.current = setInterval(async () => {
-        try {
-          const status = await axios.get(`${API_BASE_URL}/api/scrape/status/${job_id}`, { timeout: 8000 });
-          setScrapeJob(status.data);
-          if (status.data.status === 'completed' || status.data.status === 'failed') {
-            clearInterval(pollTimer.current);
-            setScrapeRunning(false);
-            // Refrescar o catálogo local com os dados novos
-            try {
-              setLoadingText('A sincronizar catálogo local com os dados novos...');
-              await syncDatabase(database);
-            } catch (e) {
-              console.error("[Settings Scrape Sync Error]:", e);
-            }
-          }
-        } catch (e) {
-          console.error("[Settings Scrape Poll Error]:", e);
-        }
-      }, 5000);
+      await syncDatabase(database);
     } catch (e) {
-      console.error("[Settings Scrape Start Error]:", e);
-      setScrapeRunning(false);
-      if (e.response && e.response.status === 409) {
-        setScrapeJob({ status: 'failed', error: 'Já existe uma recolha em curso no servidor.' });
-      } else {
-        setScrapeJob({ status: 'failed', error: 'Não foi possível contactar o servidor.' });
-      }
+      console.error('[Settings Sync Error]:', e);
+    } finally {
+      setSyncingNow(false);
     }
   };
 
@@ -119,9 +94,6 @@ const SettingsModal = ({ visible, onDismiss }) => {
     }
   };
 
-  const scrapeDone = scrapeJob && (scrapeJob.status === 'completed' || scrapeJob.status === 'failed');
-  const lastLogLines = scrapeJob && scrapeJob.log_tail ? scrapeJob.log_tail.slice(-4) : [];
-
   return (
     <Portal>
       <Modal
@@ -136,78 +108,34 @@ const SettingsModal = ({ visible, onDismiss }) => {
           </View>
           <Divider />
 
-          <ScrollView contentContainerStyle={styles.content}>
+          <View style={styles.content}>
 
-            {/* Secção: Recolha Fresca de Dados */}
-            <Text variant="titleSmall" style={styles.sectionLabel}>Atualizar Preços (Recolha Fresca)</Text>
+            {/* Secção: Sincronização */}
+            <Text variant="titleSmall" style={styles.sectionLabel}>Sincronização</Text>
             <Text variant="bodySmall" style={styles.helpText}>
-              Dispara uma nova recolha de preços diretamente dos sites dos supermercados no servidor.
-              Usa a versão em cache (offline) para uso rápido, ou atualiza agora para preços de hoje.
+              O servidor recolhe os preços automaticamente todos os dias às ~13:00. Usa o botão abaixo para
+              descarregar os dados mais recentes já recolhidos.
             </Text>
-            <View style={styles.scraperChips}>
-              {ALL_SCRAPERS.map((name) => (
-                <Chip
-                  key={name}
-                  selected={selectedScrapers.includes(name)}
-                  onPress={() => toggleScraper(name)}
-                  style={[styles.scraperChip, { backgroundColor: selectedScrapers.includes(name) ? colors.primary : colors.surfaceVariant }]}
-                  selectedColor={colors.surface}
-                  showSelectedOverlay={false}
-                  textStyle={{ color: selectedScrapers.includes(name) ? colors.surface : colors.textSecondary, fontSize: 12 }}
-                  accessibilityState={{ selected: selectedScrapers.includes(name) }}
-                >
-                  {name}
-                </Chip>
-              ))}
-            </View>
             <Button
               mode="contained"
-              icon={scrapeRunning ? 'progress-download' : 'cloud-download-outline'}
+              icon="cloud-download-outline"
               buttonColor={colors.primary}
               textColor={colors.surface}
               style={styles.actionButton}
               contentStyle={styles.buttonContent}
-              disabled={scrapeRunning || selectedScrapers.length === 0}
-              onPress={handleScrape}
+              loading={syncingNow}
+              disabled={syncingNow}
+              onPress={handleSync}
             >
-              {scrapeRunning ? 'A recolher dados...' : 'Atualizar Agora'}
+              {syncingNow ? 'A sincronizar...' : 'Sincronizar Agora'}
             </Button>
 
-            {scrapeJob && scrapeJob.status === 'running' && (
-              <Surface style={styles.jobCard} elevation={1}>
-                <View style={styles.jobHeader}>
-                  <ActivityIndicator size="small" color={colors.primary} />
-                  <Text variant="bodyMedium" style={styles.jobText}>
-                    A recolher dados de: {scrapeJob.scrapers.join(', ')}
-                  </Text>
-                </View>
-                {lastLogLines.map((line, i) => (
-                  <Text key={i} variant="bodySmall" numberOfLines={1} style={styles.jobLogLine}>
-                    {line}
-                  </Text>
-                ))}
-              </Surface>
-            )}
-            {scrapeDone && (
-              <Surface
-                style={[
-                  styles.jobCard,
-                  { borderLeftWidth: 4, borderLeftColor: scrapeJob.status === 'completed' ? colors.success : colors.danger },
-                ]}
-                elevation={1}
-              >
-                <Text variant="bodyMedium" style={styles.jobText}>
-                  {scrapeJob.status === 'completed'
-                    ? '✓ Recolha concluída! Catálogo local sincronizado.'
-                    : `✗ Recolha falhou: ${scrapeJob.error || `exit code ${scrapeJob.exit_code}`}`}
-                </Text>
-                {scrapeJob.log_tail && scrapeJob.log_tail.slice(-3).map((line, i) => (
-                  <Text key={i} variant="bodySmall" numberOfLines={1} style={styles.jobLogLine}>
-                    {line}
-                  </Text>
-                ))}
-              </Surface>
-            )}
+            <Surface style={styles.lastScrapeCard} elevation={1}>
+              <Text variant="bodySmall" style={styles.lastScrapeLabel}>Última recolha no servidor</Text>
+              <Text variant="bodyMedium" style={styles.lastScrapeValue}>
+                {formatLastScrape(lastScrapeAt)}
+              </Text>
+            </Surface>
 
             <Divider style={styles.divider} />
 
@@ -248,16 +176,16 @@ const SettingsModal = ({ visible, onDismiss }) => {
             {/* Secção Sobre */}
             <Text variant="titleSmall" style={styles.sectionLabel}>Sobre a Aplicação</Text>
             <Surface style={styles.aboutCard} elevation={1}>
-              <Text variant="titleMedium" style={styles.aboutTitle}>PriceScoutPT v1.1.0</Text>
+              <Text variant="titleMedium" style={styles.aboutTitle}>PriceScoutPT v1.2.0</Text>
               <Text variant="bodyMedium" style={styles.aboutCredits}>
                 Comparador de preços de supermercados em Portugal (Continente, Lidl, Pingo Doce, Aldi)
-                com catálogo offline-first e recolha de dados sob demanda.
+                com catálogo offline-first e recolha diária automática no servidor.
               </Text>
               <Text variant="bodySmall" style={styles.disclaimer}>
                 Os preços são recolhidos dos sites públicos dos supermercados e podem variar.
               </Text>
             </Surface>
-          </ScrollView>
+          </View>
         </Surface>
       </Modal>
 
@@ -341,17 +269,6 @@ const styles = StyleSheet.create({
     lineHeight: 16,
     paddingHorizontal: 2,
   },
-  scraperChips: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginBottom: 12,
-  },
-  scraperChip: {
-    marginRight: 6,
-    marginBottom: 6,
-    borderRadius: 16,
-    height: 32,
-  },
   actionButton: {
     borderRadius: 8,
     marginTop: 4,
@@ -360,27 +277,20 @@ const styles = StyleSheet.create({
   buttonContent: {
     height: 48,
   },
-  jobCard: {
-    backgroundColor: colors.syncOverlay,
+  lastScrapeCard: {
+    backgroundColor: colors.surfaceVariant,
     borderRadius: 8,
     padding: 12,
     marginTop: 10,
-    marginBottom: 4,
   },
-  jobHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  jobText: {
-    fontWeight: '600',
-    color: colors.textSecondary,
-    marginLeft: 8,
-    flex: 1,
-  },
-  jobLogLine: {
+  lastScrapeLabel: {
     color: colors.textMuted,
     fontSize: 11,
-    marginTop: 3,
+  },
+  lastScrapeValue: {
+    color: colors.textSecondary,
+    fontWeight: '600',
+    marginTop: 2,
   },
   divider: {
     marginVertical: 14,

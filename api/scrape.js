@@ -3,6 +3,7 @@ const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
+const db = require('./db');
 
 const router = express.Router();
 
@@ -146,12 +147,21 @@ router.get('/status/:id', (req, res) => {
   res.json(job);
 });
 
-// GET /api/scrape/status — estado global
-router.get('/status', (req, res) => {
+// GET /api/scrape/status — estado global + hora persistida da última recolha
+router.get('/status', async (req, res) => {
   const summary = Array.from(jobs.values())
     .sort((a, b) => new Date(b.started_at) - new Date(a.started_at))
     .slice(0, 10);
-  res.json({ jobs: summary });
+  // Os jobs em memória perdem-se num reinício/cold-start do contentor; a hora
+  // "real" da última recolha persistida lê-se dos produtos (sobrevive ao idle).
+  let last_scrape_at = null;
+  try {
+    const r = await db.query('SELECT MAX(last_scraped_at) AS v FROM products WHERE deleted = false');
+    if (r.rows[0] && r.rows[0].v) last_scrape_at = r.rows[0].v;
+  } catch (e) {
+    // Sem db disponível — devolve só os jobs em memória.
+  }
+  res.json({ jobs: summary, last_scrape_at });
 });
 
 module.exports = router;
