@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { View, StyleSheet, ScrollView, SectionList, Share, Image, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Text, IconButton, Button, Chip, Surface, Divider, Badge, ActivityIndicator, Card } from 'react-native-paper';
 import { Q } from '@nozbe/watermelondb';
 import withObservables from '@nozbe/with-observables';
@@ -10,6 +11,8 @@ import ProductHistoryModal from '../components/ProductHistoryModal';
 import { SUPERMARKET_BRANDS, getSupermarket, formatPrice } from '../components/ProductCard';
 import { colors } from '../theme';
 
+const DISCLAIMER_KEY = '@compare_disclaimer_seen';
+
 // Comparador de preços: fuzzy-match local entre supermercados e custo total
 // de cada um, mostrando qual é o mais barato para a lista atual.
 const ComparisonDetails = ({ shoppingList, items, favoriteIds, onToggleFavorite }) => {
@@ -18,6 +21,23 @@ const ComparisonDetails = ({ shoppingList, items, favoriteIds, onToggleFavorite 
 
   const [selectedProductForHistory, setSelectedProductForHistory] = useState(null);
   const [isHistoryVisible, setIsHistoryVisible] = useState(false);
+  const [showDisclaimer, setShowDisclaimer] = useState(false);
+
+  // Mostra a nota de comparação aproximada apenas na primeira vez.
+  useEffect(() => {
+    let isMounted = true;
+    AsyncStorage.getItem(DISCLAIMER_KEY).then((seen) => {
+      if (isMounted && seen !== 'true') {
+        setShowDisclaimer(true);
+      }
+    }).catch(() => {});
+    return () => { isMounted = false; };
+  }, []);
+
+  const dismissDisclaimer = () => {
+    setShowDisclaimer(false);
+    AsyncStorage.setItem(DISCLAIMER_KEY, 'true').catch(() => {});
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -262,6 +282,27 @@ const ComparisonDetails = ({ shoppingList, items, favoriteIds, onToggleFavorite 
 
   return (
     <View style={styles.detailsContainer}>
+      {showDisclaimer && (
+        <Surface style={styles.disclaimerCard} elevation={1} accessible accessibilityRole="alert" accessibilityLabel="Aviso sobre a comparação de preços">
+          <View style={styles.disclaimerTextWrap}>
+            <IconButton icon="information-outline" size={20} iconColor={colors.primary} style={styles.disclaimerIcon} accessible={false} importantForAccessibility="no-hide-descendants" />
+            <Text variant="bodySmall" style={styles.disclaimerText}>
+              A comparação entre supermercados é <Text style={styles.disclaimerStrong}>aproximada</Text>: o mesmo produto tem marcas,
+              embalagens e pesos diferentes em cada loja. Para o preço exato, pesquisa o produto diretamente em cada supermercado.
+            </Text>
+          </View>
+          <IconButton
+            icon="close"
+            size={18}
+            iconColor={colors.textMuted}
+            onPress={dismissDisclaimer}
+            style={styles.disclaimerClose}
+            accessibilityLabel="Fechar aviso"
+            hitSlop={8}
+          />
+        </Surface>
+      )}
+
       <View>
         <View style={styles.sectionTitleRow}>
           <Text variant="titleMedium" style={styles.sectionTitle} accessibilityRole="header">Custo Total por Supermercado</Text>
@@ -527,6 +568,39 @@ const styles = StyleSheet.create({
   },
   detailsContainer: {
     flex: 1,
+  },
+  disclaimerCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.primaryContainer,
+    borderRadius: 10,
+    marginHorizontal: 12,
+    marginTop: 10,
+    paddingRight: 4,
+    paddingVertical: 2,
+  },
+  disclaimerTextWrap: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  disclaimerIcon: {
+    margin: 0,
+    marginTop: 6,
+  },
+  disclaimerText: {
+    flex: 1,
+    color: colors.textSecondary,
+    lineHeight: 17,
+    paddingVertical: 8,
+    marginRight: 4,
+  },
+  disclaimerStrong: {
+    fontWeight: 'bold',
+    color: colors.textPrimary,
+  },
+  disclaimerClose: {
+    margin: 0,
   },
   sectionTitleRow: {
     flexDirection: 'row',
