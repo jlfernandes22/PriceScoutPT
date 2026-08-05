@@ -342,9 +342,6 @@ const SearchScreen = ({ shoppingLists, favorites, categories }) => {
           <Text variant="headlineSmall" style={styles.headerTitle} numberOfLines={1} accessibilityRole="header">
             PriceScoutPT
           </Text>
-          <Text variant="bodyMedium" style={styles.headerSubtitle} numberOfLines={1}>
-            Compara preços dos supermercados portugueses
-          </Text>
         </View>
         <View style={styles.headerActions}>
           <IconButton
@@ -522,10 +519,6 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontWeight: 'bold',
     color: colors.textPrimary,
-  },
-  headerSubtitle: {
-    color: colors.textMuted,
-    fontSize: 14,
   },
   headerActions: {
     flexDirection: 'row',

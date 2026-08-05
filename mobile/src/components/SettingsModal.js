@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, Modal as RNModal } from 'react-native';
+import { View, StyleSheet, Modal as RNModal, ScrollView } from 'react-native';
 import { Portal, Modal, Dialog, Surface, Text, IconButton, Divider, Button, ActivityIndicator } from 'react-native-paper';
 import axios from 'axios';
 import Constants from 'expo-constants';
@@ -111,7 +111,7 @@ const SettingsModal = ({ visible, onDismiss }) => {
           </View>
           <Divider />
 
-          <View style={styles.content}>
+          <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
 
             {/* Secção: Sincronização */}
             <Text variant="titleSmall" style={styles.sectionLabel}>Sincronização</Text>
@@ -188,7 +188,7 @@ const SettingsModal = ({ visible, onDismiss }) => {
                 Os preços são recolhidos dos sites públicos dos supermercados e podem variar.
               </Text>
             </Surface>
-          </View>
+          </ScrollView>
         </Surface>
       </Modal>
 
@@ -258,6 +258,9 @@ const styles = StyleSheet.create({
   content: {
     padding: 20,
     paddingBottom: 32,
+  },
+  scroll: {
+    flexShrink: 1,
   },
   sectionLabel: {
     fontWeight: 'bold',
