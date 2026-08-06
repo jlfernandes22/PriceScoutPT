@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, Modal as RNModal, ScrollView } from 'react-native';
-import { Portal, Modal, Dialog, Surface, Text, IconButton, Divider, Button, ActivityIndicator } from 'react-native-paper';
+import { Portal, Modal, Dialog, Surface, Text, IconButton, Divider, Button, ActivityIndicator, Snackbar } from 'react-native-paper';
 import axios from 'axios';
 import Constants from 'expo-constants';
 import { database } from '../model';
@@ -21,6 +21,7 @@ const SettingsModal = ({ visible, onDismiss }) => {
   const [loading, setLoading] = useState(false);
   const [loadingText, setLoadingText] = useState('');
   const [syncingNow, setSyncingNow] = useState(false);
+  const [syncMsg, setSyncMsg] = useState('');
   const [lastScrapeAt, setLastScrapeAt] = useState(null);
   const [resetDialogVisible, setResetDialogVisible] = useState(false);
   const [clearDialogVisible, setClearDialogVisible] = useState(false);
@@ -49,8 +50,10 @@ const SettingsModal = ({ visible, onDismiss }) => {
     setSyncingNow(true);
     try {
       await syncDatabase(database);
+      setSyncMsg('Catálogo atualizado.');
     } catch (e) {
       console.error('[Settings Sync Error]:', e);
+      setSyncMsg('Não foi possível atualizar. Verifica a ligação à internet.');
     } finally {
       setSyncingNow(false);
     }
@@ -202,6 +205,16 @@ const SettingsModal = ({ visible, onDismiss }) => {
           </Surface>
         </View>
       </RNModal>
+
+      <Snackbar
+        visible={syncMsg !== ''}
+        onDismiss={() => setSyncMsg('')}
+        duration={3000}
+        action={{ label: 'OK', onPress: () => setSyncMsg('') }}
+        accessibilityLiveRegion="polite"
+      >
+        {syncMsg}
+      </Snackbar>
 
       <Dialog visible={resetDialogVisible} onDismiss={() => setResetDialogVisible(false)} style={{ backgroundColor: colors.surface }}>
         <Dialog.Title>Forçar Sincronização</Dialog.Title>

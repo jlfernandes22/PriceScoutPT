@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, memo } from 'react';
 import { View, StyleSheet, FlatList, ScrollView, Keyboard } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Searchbar, Text, IconButton, Portal, Dialog, Button, TextInput, RadioButton, Surface, Chip, Icon } from 'react-native-paper';
+import { Searchbar, Text, IconButton, Portal, Dialog, Button, TextInput, RadioButton, Surface, Chip, Icon, Snackbar } from 'react-native-paper';
 import { Q } from '@nozbe/watermelondb';
 import withObservables from '@nozbe/with-observables';
 import { database } from '../model';
@@ -196,6 +196,7 @@ const SearchScreen = ({ shoppingLists, favorites, categories }) => {
   const [selectedCategoryId, setSelectedCategoryId] = useState(null);
   const [syncing, setSyncing] = useState(false);
   const [syncTrigger, setSyncTrigger] = useState(null);
+  const [syncMessage, setSyncMessage] = useState('');
   const [searchTimer, setSearchTimer] = useState(null);
 
   const [isDialogVisible, setIsDialogVisible] = useState(false);
@@ -245,8 +246,10 @@ const SearchScreen = ({ shoppingLists, favorites, categories }) => {
     setSyncTrigger(trigger);
     try {
       await syncDatabase(database);
+      setSyncMessage('Catálogo atualizado.');
     } catch (e) {
       console.error("[Sync Screen Error]:", e);
+      setSyncMessage('Não foi possível atualizar. Verifica a ligação à internet.');
     } finally {
       setSyncing(false);
       setSyncTrigger(null);
@@ -414,6 +417,16 @@ const SearchScreen = ({ shoppingLists, favorites, categories }) => {
         visible={isSettingsVisible}
         onDismiss={() => setIsSettingsVisible(false)}
       />
+
+      <Snackbar
+        visible={syncMessage !== ''}
+        onDismiss={() => setSyncMessage('')}
+        duration={3000}
+        action={{ label: 'OK', onPress: () => setSyncMessage('') }}
+        accessibilityLiveRegion="polite"
+      >
+        {syncMessage}
+      </Snackbar>
 
       <Portal>
         <Dialog visible={isDialogVisible} onDismiss={() => setIsDialogVisible(false)} style={styles.dialog}>

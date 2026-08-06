@@ -201,24 +201,8 @@ class AuchanScraper(ScraperBase):
                 return unit_text
         return None
 
-    def _text(self, element):
-        return element.get_text(strip=True) if element else None
 
-    def _parse_price(self, price_text):
-        if not price_text:
-            return 0.0
-        normalized = price_text.replace('€', '').replace(',', '.').strip()
-        match = re.search(r'\d+[\.,]?\d*', normalized)
-        return float(match.group(0).replace(',', '.')) if match else 0.0
 
-    def _extract_url(self, tile):
-        link = tile.find('a', href=True)
-        if link:
-            href = link['href']
-            if href.startswith('/'):
-                return urljoin(self.base_url, href)
-            return href
-        return None
 
     def _extract_image(self, tile):
         image = tile.select_one('img[data-src]') or tile.find('img')

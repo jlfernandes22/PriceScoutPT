@@ -193,21 +193,8 @@ class PingoDoceScraper(ScraperBase):
             'last_scraped_at': None,
         }
 
-    def _text(self, element):
-        return element.get_text(strip=True) if element else None
 
-    def _parse_price(self, price_text):
-        if not price_text:
-            return 0.0
-        normalized = price_text.replace('€', '').replace(',', '.').strip()
-        match = re.search(r'\d+[\.,]?\d*', normalized)
-        return float(match.group(0).replace(',', '.')) if match else 0.0
 
-    def _extract_url(self, card):
-        link = card.find('a', href=True)
-        if link:
-            return urljoin(self.base_url, link['href'])
-        return None
 
     def _extract_image(self, card):
         image = card.find('img')

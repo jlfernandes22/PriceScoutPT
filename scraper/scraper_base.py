@@ -1,5 +1,7 @@
 from abc import ABC, abstractmethod
+import re
 import time
+from urllib.parse import urljoin
 
 import requests
 
@@ -90,6 +92,29 @@ class ScraperBase(ABC):
         text = re.sub(r'[^a-z0-9\s-]', '', text)
         text = re.sub(r'[\s]+', '-', text)
         return text.strip('-')
+
+    # --- Helpers de extração partilhados por todos os scrapers (DOM) ---
+
+    def _text(self, element):
+        return element.get_text(strip=True) if element else None
+
+    def _parse_price(self, price_text):
+        """Extrai o primeiro valor numérico de um texto de preço ("2,99 €" -> 2.99)."""
+        if not price_text:
+            return 0.0
+        normalized = price_text.replace('€', '').replace(',', '.').strip()
+        match = re.search(r'\d+[\.,]?\d*', normalized)
+        return float(match.group(0).replace(',', '.')) if match else 0.0
+
+    def _extract_url(self, card):
+        """Primeiro link do card, resolvido contra o base_url do supermercado."""
+        link = card.find('a', href=True)
+        if link:
+            href = link['href']
+            if href.startswith('/'):
+                return urljoin(self.base_url, href)
+            return href
+        return None
 
     def close(self) -> None:
         pass
