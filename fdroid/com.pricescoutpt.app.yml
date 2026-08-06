@@ -55,8 +55,6 @@ Builds:
       - mobile/node_modules/react-native-sqlite-storage/src/android-native/build
       - mobile/node_modules/expo/template.tgz
       - mobile/node_modules/react-native/React/I18n/strings/*/fbt_language_pack.bin
-      - mobile/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Fontisto.ttf
-      - mobile/node_modules/react-native-svg/android/.gradle
     build: cd android && ./gradlew assembleRelease
     ndk: r27b
 
