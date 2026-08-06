@@ -8,7 +8,6 @@ IssueTracker: https://github.com/jlfernandes22/PriceScoutPT/issues
 
 Name: PriceScoutPT
 AutoName: PriceScoutPT
-Summary: Comparador de preços dos supermercados portugueses (offline)
 Description: |
   Compara preços de Continente, Lidl, Pingo Doce, Aldi e Auchan num só lugar,
   mesmo sem internet. O catálogo é descarregado para o telemóvel (offline-first):
@@ -36,11 +35,44 @@ Builds:
       - apt-get install -y curl ca-certificates gnupg
       - curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
       - apt-get install -y nodejs
+    ndk: r27b
     output: android/app/build/outputs/apk/release/app-release.apk
     prebuild: npm ci --legacy-peer-deps
+    scandelete:
+      # Lixo compilado dentro dos pacotes npm — não é usado pelo build do gradle
+      - mobile/node_modules/react-native-sqlite-storage/src/android/build
+      - mobile/node_modules/react-native-sqlite-storage/src/android-native/build
+      - mobile/node_modules/expo/template.tgz
+      - mobile/node_modules/react-native/React/I18n/strings/*/fbt_language_pack.bin
+      - mobile/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Fontisto.ttf
+      - mobile/node_modules/react-native-svg/android/.gradle
+    scanignore:
+      # Componentes pré-compilados do React Native/Expo que vêm do npm e são
+      # necessários ao build (padrão usado por outras apps RN no fdroiddata,
+      # ex: com.etesync.notes, com.nextcloudpasswords).
+      - mobile/node_modules/react-native/sdks/hermesc
+      - mobile/node_modules/react-native/ReactAndroid/publish.gradle
+      - mobile/node_modules/react-native-sqlite-storage/platforms/android-native/libs
+      - mobile/node_modules/expo-font/local-maven-repo
+      - mobile/node_modules/expo-asset/local-maven-repo
+      - mobile/node_modules/expo-keep-awake/local-maven-repo
+      - mobile/node_modules/expo-file-system/local-maven-repo
+      - mobile/node_modules/expo-modules-core/android/ExpoModulesCorePlugin.gradle
+      - mobile/node_modules/expo-modules-autolinking/scripts/android/autolinking_implementation.gradle
+      - mobile/node_modules/@react-native-async-storage/async-storage/android/build.gradle
+      - mobile/node_modules/react-native-safe-area-context/android/build.gradle
+      - mobile/node_modules/react-native-svg/android/build.gradle
     build: cd android && ./gradlew assembleRelease
 
 AutoUpdateMode: Version
 UpdateCheckMode: Tags
 CurrentVersion: 1.0.0
 CurrentVersionCode: 1
+
+MaintainerNotes: |-
+  scanignore is used to allow the prebuilt React Native/Expo components that
+  come from npm: the react-native/android local Maven repository, the Hermes
+  compiler binaries, the Expo local-maven-repo AARs, the native SQLite driver
+  of react-native-sqlite-storage, and the dependency gradle files that
+  reference local Maven repos. This is the standard pattern used by other
+  React Native apps in fdroiddata (e.g. com.etesync.notes).
