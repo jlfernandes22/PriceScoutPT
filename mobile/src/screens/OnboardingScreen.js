@@ -9,21 +9,39 @@ const { width } = Dimensions.get('window');
 
 const SLIDES = [
   {
-    title: 'Catálogo Offline',
-    icon: 'database-sync',
-    description: 'O PriceScoutPT descarrega e guarda o catálogo de produtos no seu telemóvel para que possa pesquisar preços de forma ultra-rápida, mesmo sem internet e sem gastar dados móveis!',
+    title: 'Bem-vindo ao PriceScoutPT',
+    icon: 'hand-wave',
+    description: 'Pesquisa preços de 5 supermercados portugueses — Continente, Lidl, Pingo Doce, Aldi e Auchan — mesmo sem internet, tudo guardado no teu telemóvel.',
     color: colors.primary,
   },
   {
-    title: 'Comparador de Cabaz',
-    icon: 'cart-arrow-down',
-    description: 'Adicione os seus produtos diários ao cabaz. O nosso motor inteligente de Fuzzy-Matching Jaccard calcula e descobre instantaneamente qual é o supermercado local mais barato para si!',
+    title: 'Como Pesquisar',
+    icon: 'magnify',
+    description: 'Escreve o nome do produto na barra no topo (ex: "arroz" ou "atum"). Usa os filtros de supermercado e de categoria para afinares a pesquisa.',
+    color: colors.primary,
+  },
+  {
+    title: 'Como Adicionar ao Cabaz',
+    icon: 'cart-plus',
+    description: 'Toca no ícone do carrinho de um produto para o adicionares à tua lista de compras. Ajusta as quantidades no separador Meu Cabaz.',
     color: colors.success,
   },
   {
-    title: 'Histórico e Promoções',
+    title: 'Como Comparar',
+    icon: 'scale-balance',
+    description: 'No separador Comparar vês o custo total do teu cabaz em cada supermercado. O supermercado mais barato ganha o troféu.',
+    color: colors.success,
+  },
+  {
+    title: 'Histórico de Preços',
     icon: 'chart-bell-curve-cumulative',
-    description: 'Evite falsas promoções! Consulte o histórico real da evolução de preços dos últimos 30 dias em gráficos lineares detalhados e compre com total transparência e poupança.',
+    description: 'Toca num produto para veres a evolução do preço nos últimos 30 dias e evitares falsas promoções.',
+    color: colors.danger,
+  },
+  {
+    title: 'Manter Atualizado',
+    icon: 'sync',
+    description: 'Puxa a lista para baixo ou toca no ícone de sincronização para obteres os preços mais recentes. A recolha é automática todos os dias.',
     color: colors.danger,
   },
 ];
