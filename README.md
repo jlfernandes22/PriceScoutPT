@@ -194,6 +194,20 @@ Cada scraper usa a **fonte mais fiável** de cada site — as APIs internas que 
 
 ## 🧪 Testes
 
+### Testes unitários (mobile)
+
+```bash
+cd mobile
+npm test                      # node --test tests/ (fuzzy matcher + preço por unidade)
+```
+
+### Testes unitários (scrapers)
+
+```bash
+cd scraper
+.venv/bin/python -m unittest discover -s tests   # taxonomia + helpers de extração
+```
+
 ### Scrapers individuais (sem Docker)
 
 ```bash
