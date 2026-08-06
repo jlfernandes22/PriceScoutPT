@@ -29,14 +29,16 @@ Builds:
   - versionName: 1.0.0
     versionCode: 1
     commit: v1.0.0
-    subdir: mobile
+    subdir: mobile/android
     sudo:
       - apt-get update
       - apt-get install -y curl ca-certificates gnupg
       - curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
       - apt-get install -y nodejs
-    output: android/app/build/outputs/apk/release/app-release.apk
-    prebuild: npm ci --legacy-peer-deps
+    gradle:
+      - assembleRelease
+    output: app/build/outputs/apk/release/app-release.apk
+    prebuild: cd .. && npm ci --legacy-peer-deps
     scanignore:
       - mobile/node_modules/react-native/sdks/hermesc
       - mobile/node_modules/react-native/ReactAndroid/publish.gradle
@@ -55,7 +57,6 @@ Builds:
       - mobile/node_modules/react-native-sqlite-storage/src/android-native/build
       - mobile/node_modules/expo/template.tgz
       - mobile/node_modules/react-native/React/I18n/strings/*/fbt_language_pack.bin
-    build: cd android && ./gradlew assembleRelease
     ndk: r27b
 
 MaintainerNotes: |-
