@@ -1,14 +1,3 @@
-# F-Droid metadata para PriceScoutPT (com.pricescoutpt.app)
-#
-# Submissão: copiar para o repositório https://gitlab.com/fdroid/fdroiddata
-# em metadata/com.pricescoutpt.app.yml e abrir um Merge Request (ver SUBMISSION.md).
-#
-# Estratégia de build:
-#  - O projeto nativo android/ está commitado no upstream (expo prebuild já feito),
-#    pelo que o build só precisa de Node (para o Metro bundler + autolinking) e Gradle.
-#  - O F-Droid assina com as suas próprias chaves (a assinatura local é ignorada);
-#    sem keystore.properties, o gradle usa a debug keystore — normal para o build server.
-
 Categories:
   - Market & Price
 License: GPL-3.0-or-later
@@ -17,8 +6,8 @@ WebSite: https://github.com/jlfernandes22/PriceScoutPT
 SourceCode: https://github.com/jlfernandes22/PriceScoutPT
 IssueTracker: https://github.com/jlfernandes22/PriceScoutPT/issues
 
-AutoName: PriceScoutPT
 Name: PriceScoutPT
+AutoName: PriceScoutPT
 Summary: Comparador de preços dos supermercados portugueses (offline)
 Description: |
   Compara preços de Continente, Lidl, Pingo Doce, Aldi e Auchan num só lugar,
@@ -47,13 +36,10 @@ Builds:
       - apt-get install -y curl ca-certificates gnupg
       - curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
       - apt-get install -y nodejs
-    prebuild:
-      - npm ci --legacy-peer-deps
-    build:
-      - cd android && ./gradlew assembleRelease
     output: android/app/build/outputs/apk/release/app-release.apk
+    prebuild: npm ci --legacy-peer-deps
+    build: cd android && ./gradlew assembleRelease
 
-# Autoupdate: novo tag → novo build. versionName/versionCode no build.gradle (estático).
 AutoUpdateMode: Version
 UpdateCheckMode: Tags
 CurrentVersion: 1.0.0
