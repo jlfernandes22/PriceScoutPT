@@ -35,21 +35,9 @@ Builds:
       - apt-get install -y curl ca-certificates gnupg
       - curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
       - apt-get install -y nodejs
-    ndk: r27b
     output: android/app/build/outputs/apk/release/app-release.apk
     prebuild: npm ci --legacy-peer-deps
-    scandelete:
-      # Lixo compilado dentro dos pacotes npm — não é usado pelo build do gradle
-      - mobile/node_modules/react-native-sqlite-storage/src/android/build
-      - mobile/node_modules/react-native-sqlite-storage/src/android-native/build
-      - mobile/node_modules/expo/template.tgz
-      - mobile/node_modules/react-native/React/I18n/strings/*/fbt_language_pack.bin
-      - mobile/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Fontisto.ttf
-      - mobile/node_modules/react-native-svg/android/.gradle
     scanignore:
-      # Componentes pré-compilados do React Native/Expo que vêm do npm e são
-      # necessários ao build (padrão usado por outras apps RN no fdroiddata,
-      # ex: com.etesync.notes, com.nextcloudpasswords).
       - mobile/node_modules/react-native/sdks/hermesc
       - mobile/node_modules/react-native/ReactAndroid/publish.gradle
       - mobile/node_modules/react-native-sqlite-storage/platforms/android-native/libs
@@ -62,12 +50,15 @@ Builds:
       - mobile/node_modules/@react-native-async-storage/async-storage/android/build.gradle
       - mobile/node_modules/react-native-safe-area-context/android/build.gradle
       - mobile/node_modules/react-native-svg/android/build.gradle
+    scandelete:
+      - mobile/node_modules/react-native-sqlite-storage/src/android/build
+      - mobile/node_modules/react-native-sqlite-storage/src/android-native/build
+      - mobile/node_modules/expo/template.tgz
+      - mobile/node_modules/react-native/React/I18n/strings/*/fbt_language_pack.bin
+      - mobile/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Fontisto.ttf
+      - mobile/node_modules/react-native-svg/android/.gradle
     build: cd android && ./gradlew assembleRelease
-
-AutoUpdateMode: Version
-UpdateCheckMode: Tags
-CurrentVersion: 1.0.0
-CurrentVersionCode: 1
+    ndk: r27b
 
 MaintainerNotes: |-
   scanignore is used to allow the prebuilt React Native/Expo components that
@@ -76,3 +67,8 @@ MaintainerNotes: |-
   of react-native-sqlite-storage, and the dependency gradle files that
   reference local Maven repos. This is the standard pattern used by other
   React Native apps in fdroiddata (e.g. com.etesync.notes).
+
+AutoUpdateMode: Version
+UpdateCheckMode: Tags
+CurrentVersion: 1.0.0
+CurrentVersionCode: 1
