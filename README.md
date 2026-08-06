@@ -12,7 +12,7 @@
 ![PostgreSQL](https://img.shields.io/badge/DB-PostgreSQL%2015-4169E1?logo=postgresql)
 ![Azure](https://img.shields.io/badge/Deploy-Azure%20Container%20Apps%20(free)-0078D4?logo=microsoftazure)
 ![Offline](https://img.shields.io/badge/offline--first-WatermelonDB-00C7B7)
-![License](https://img.shields.io/badge/license-Private-red)
+![License](https://img.shields.io/badge/license-GPL--3.0-brightgreen)
 
 </div>
 
@@ -340,7 +340,7 @@ Nada de segredos reais vive no repositório.
 
 ## 🤝 Contribuir
 
-Este é um projeto **privado** de momento. Ainda assim, se tiveres acesso ao repositório:
+O projeto é **open-source** (GPL-3.0). Para contribuir:
 
 1. Cria um *branch* a partir de `main`.
 2. Faz *commits* pequenos e descritivos.
@@ -353,7 +353,7 @@ Antes de abrir o PR, certifica-te de que:
 
 ## 📄 Licença
 
-**Private** — todos os direitos reservados. Não está atualmente publicado sob licença open-source. Contacta o proprietário para utilização.
+**GPL-3.0** — [GNU General Public License v3](LICENSE). Livre para usar, modificar e distribuir; qualquer versão derivada deve manter a mesma licença e disponibilizar o código-fonte.
 
 ---
 

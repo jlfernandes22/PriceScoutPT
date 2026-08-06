@@ -1,0 +1,61 @@
+# F-Droid metadata para PriceScoutPT (com.pricescoutpt.app)
+#
+# Para submeter ao F-Droid: copiar este ficheiro para o repositório
+# https://gitlab.com/fdroid/fdroiddata em metadata/com.pricescoutpt.app.yml
+# e abrir um Merge Request.
+#
+# Notas de build:
+#  - App Expo/React Native: o build precisa de Node + expo prebuild antes do gradle.
+#  - O F-Droid assina com as suas próprias chaves (a assinatura local é ignorada).
+
+Categories:
+  - Money
+  - Shopping
+License: GPL-3.0-or-later
+AuthorName: PriceScoutPT
+WebSite: https://github.com/jlfernandes22/PriceScoutPT
+SourceCode: https://github.com/jlfernandes22/PriceScoutPT
+IssueTracker: https://github.com/jlfernandes22/PriceScoutPT/issues
+
+AutoName: PriceScoutPT
+Name: PriceScoutPT
+Summary: Comparador de preços dos supermercados portugueses (offline)
+Description: |
+  Compara preços de Continente, Lidl, Pingo Doce, Aldi e Auchan num só lugar.
+  O catálogo é descarregado para o telemóvel (offline-first): pesquisa, cria
+  o teu cabaz e vê em que supermercado fica mais barato, mesmo sem internet.
+
+  • Catálogo offline (WatermelonDB/SQLite)
+  • Comparador de cabaz por supermercado
+  • Histórico de preços dos últimos 30 dias
+  • Recolha diária automática no servidor (GitHub Actions)
+
+  Os preços são de referência nacional (catálogo online) e podem variar nas
+  lojas físicas por região.
+
+RepoType: git
+Repo: https://github.com/jlfernandes22/PriceScoutPT
+
+# Build da app (expo prebuild gera o projeto nativo antes do gradle).
+# Requer Node.js no ambiente de build do F-Droid.
+Builds:
+  - versionName: 1.0.0
+    versionCode: 1
+    commit: v1.0.0
+    subdir: mobile
+    sudo:
+      - apt-get update
+      - apt-get install -y nodejs npm
+    init:
+      - npm ci --legacy-peer-deps
+      - npx expo prebuild --platform android --no-install
+    gradle:
+      - yes
+    buildserver_apt:
+      - nodejs
+      - npm
+
+AutoUpdateMode: Version
+UpdateCheckMode: Tags
+CurrentVersion: 1.0.0
+CurrentVersionCode: 1
