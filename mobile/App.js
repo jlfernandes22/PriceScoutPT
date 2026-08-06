@@ -32,11 +32,13 @@ function AppContent() {
     { key: 'basket', title: 'Meu Cabaz', focusedIcon: 'cart', unfocusedIcon: 'cart-outline' },
   ]);
 
-  const runSync = async () => {
-    setIsLoading(true);
+  const runSync = async (background = false) => {
+    if (!background) {
+      setIsLoading(true);
+    }
     setHasOnboarded(true);
     try {
-      await syncDatabase(database, { onProgress: setSyncProgress });
+      await syncDatabase(database, { onProgress: background ? null : setSyncProgress });
     } catch (error) {
       console.error('[App] Erro na sincronização:', error);
     } finally {
@@ -49,9 +51,17 @@ function AppContent() {
       try {
         const completed = await AsyncStorage.getItem('@onboarding_completed');
         if (completed === 'true') {
-          // Utilizador recorrente: mantém o ecrã de carregamento ativo enquanto
-          // a sincronização inicial (ou incremental) não termina.
-          await runSync();
+          // Utilizador recorrente. Se já existe catálogo local, mostra a app
+          // IMEDIATAMENTE (offline-first) e sincroniza em segundo plano — o
+          // ecrã de carregamento só bloqueia quando não há dados (1ª vez).
+          const hasLocalData = (await database.collections.get('products').query().fetchCount()) > 0;
+          if (hasLocalData) {
+            setHasOnboarded(true);
+            setIsLoading(false);
+            runSync(true);
+          } else {
+            await runSync(false);
+          }
         } else {
           // Primeira utilização: segue para o onboarding (o sync inicia no fim).
           setIsLoading(false);
