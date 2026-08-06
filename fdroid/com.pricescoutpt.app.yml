@@ -35,7 +35,10 @@ Builds:
       - apt-get install -y curl ca-certificates gnupg
       - curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
       - apt-get install -y nodejs
-      - apt-get install -y openjdk-17-jdk-headless
+      - curl -L https://api.adoptium.net/v3/binary/latest/17/ga/linux/x64/jdk/hotspot/normal/eclipse
+        -o /tmp/jdk17.tar.gz
+      - mkdir -p /usr/lib/jvm/java-17-temurin
+      - tar -xzf /tmp/jdk17.tar.gz -C /usr/lib/jvm/java-17-temurin --strip-components=1
     gradle:
       - yes
     output: app/build/outputs/apk/release/app-release.apk
