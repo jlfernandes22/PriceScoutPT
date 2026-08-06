@@ -144,6 +144,12 @@ android {
     androidResources {
         ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:!CVS:!thumbs.db:!picasa.ini:!*~'
     }
+    // F-Droid exige que o APK não inclua o bloco "Dependency metadata" no
+    // signing block (dados encriptados para a Play Store, inverificáveis).
+    dependenciesInfo {
+        includeInApk = false
+        includeInBundle = false
+    }
 }
 
 // Apply static values from `gradle.properties` to the `android.packagingOptions`
