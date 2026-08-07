@@ -13,7 +13,7 @@ Repo: https://github.com/jlfernandes22/PriceScoutPT
 Builds:
   - versionName: 1.0.0
     versionCode: 1
-    commit: 7f8ef02fe14f140cf15998d6eaeb716891fa56ad
+    commit: adac03bc0e3ff32b7fa075744e68afed14171fc7
     subdir: mobile/android/app
     sudo:
       - apt-get update
