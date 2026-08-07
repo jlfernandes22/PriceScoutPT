@@ -26,7 +26,7 @@ Builds:
       - npm ci --legacy-peer-deps
     gradle:
       - yes
-    output: app/build/outputs/apk/release/app-release.apk
+    output: build/outputs/apk/release/app-release.apk
     prebuild:
       - cd ../..
       - sed -i -e '/jvmToolchain\|JavaVersion/s/17/21/' node_modules/@react-native/gradle-plugin/*/build.gradle.kts
