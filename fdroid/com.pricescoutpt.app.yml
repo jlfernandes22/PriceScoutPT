@@ -6,71 +6,48 @@ WebSite: https://github.com/jlfernandes22/PriceScoutPT
 SourceCode: https://github.com/jlfernandes22/PriceScoutPT
 IssueTracker: https://github.com/jlfernandes22/PriceScoutPT/issues
 
-Name: PriceScoutPT
 AutoName: PriceScoutPT
-Description: |
-  Compara preços de Continente, Lidl, Pingo Doce, Aldi e Auchan num só lugar,
-  mesmo sem internet. O catálogo é descarregado para o telemóvel (offline-first):
-  pesquisa, cria o teu cabaz e vê em que supermercado fica mais barato.
-
-  • Catálogo offline (WatermelonDB/SQLite)
-  • Pesquisa com filtros de supermercado e categoria
-  • Cabaz de compras com comparação de preços entre supermercados
-  • Histórico de preços dos últimos 30 dias
-  • Recolha diária automática (servidor + GitHub Actions)
-
-  Sem contas, sem tracking, sem anúncios. Os preços são de referência nacional
-  (catálogo online) e podem variar nas lojas físicas por região.
-
 RepoType: git
 Repo: https://github.com/jlfernandes22/PriceScoutPT
 
 Builds:
   - versionName: 1.0.0
     versionCode: 1
-    commit: v1.0.0
-    subdir: mobile/android
+    commit: 7f8ef02fe14f140cf15998d6eaeb716891fa56ad
+    subdir: mobile/android/app
     sudo:
       - apt-get update
       - apt-get install -y curl ca-certificates gnupg
       - curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
       - apt-get install -y nodejs
-      - curl -L 
-        https://api.adoptium.net/v3/binary/latest/17/ga/linux/x64/jdk/hotspot/normal/eclipse
-        -o /tmp/jdk17.tar.gz
-      - mkdir -p /usr/lib/jvm/java-17-temurin
-      - tar -xzf /tmp/jdk17.tar.gz -C /usr/lib/jvm/java-17-temurin --strip-components=1
+    init:
+      - cd ../..
+      - npm ci --legacy-peer-deps
+    prebuild:
+      - cd ../..
+      - sed -i -e '/jvmToolchain\|JavaVersion/s/17/21/'
+        node_modules/@react-native/gradle-plugin/*/build.gradle.kts
+        node_modules/@react-native/gradle-plugin/react-native-gradle-plugin/src/main/kotlin/com/facebook/react/utils/JdkConfiguratorUtils.kt
     gradle:
       - yes
     output: app/build/outputs/apk/release/app-release.apk
-    prebuild: cd .. && npm ci --legacy-peer-deps
     scanignore:
-      - mobile/node_modules/react-native/sdks/hermesc
+      - mobile/node_modules/react-native/sdks/hermesc/linux64-bin/hermesc
       - mobile/node_modules/react-native/ReactAndroid/publish.gradle
-      - mobile/node_modules/react-native-sqlite-storage/platforms/android-native/libs
-      - mobile/node_modules/expo-font/local-maven-repo
-      - mobile/node_modules/expo-asset/local-maven-repo
-      - mobile/node_modules/expo-keep-awake/local-maven-repo
-      - mobile/node_modules/expo-file-system/local-maven-repo
       - mobile/node_modules/expo-modules-core/android/ExpoModulesCorePlugin.gradle
       - mobile/node_modules/expo-modules-autolinking/scripts/android/autolinking_implementation.gradle
       - mobile/node_modules/@react-native-async-storage/async-storage/android/build.gradle
       - mobile/node_modules/react-native-safe-area-context/android/build.gradle
       - mobile/node_modules/react-native-svg/android/build.gradle
     scandelete:
-      - mobile/node_modules/react-native-sqlite-storage/src/android/build
-      - mobile/node_modules/react-native-sqlite-storage/src/android-native/build
-      - mobile/node_modules/expo/template.tgz
-      - mobile/node_modules/react-native/React/I18n/strings/*/fbt_language_pack.bin
-    ndk: r27b
+      - mobile/node_modules
 
 MaintainerNotes: |-
-  scanignore is used to allow the prebuilt React Native/Expo components that
-  come from npm: the react-native/android local Maven repository, the Hermes
-  compiler binaries, the Expo local-maven-repo AARs, the native SQLite driver
-  of react-native-sqlite-storage, and the dependency gradle files that
-  reference local Maven repos. This is the standard pattern used by other
-  React Native apps in fdroiddata (e.g. com.etesync.notes).
+  React Native/Expo app built following templates/build-react-native.yml: the
+  React Native Gradle plugin is patched to use JDK 21 (buildserver default)
+  instead of 17, node_modules is scandeleted so the prebuilt binaries (Hermes,
+  local Maven repos) are removed from the source scan, and the Gradle files
+  that reference local Maven repos are scanignored.
 
 AutoUpdateMode: Version
 UpdateCheckMode: Tags

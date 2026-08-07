@@ -1,0 +1,12 @@
+Compara preços de Continente, Lidl, Pingo Doce, Aldi e Auchan num só lugar, mesmo sem internet.
+
+O PriceScoutPT descarrega o catálogo para o teu telemóvel (offline-first) e permite-te:
+
+• Pesquisar produtos por nome, com filtros de supermercado e categoria
+• Criar o teu cabaz de compras e ver em que supermercado fica mais barato
+• Consultar o histórico real de preços dos últimos 30 dias, para evitares falsas promoções
+• Atualizar o catálogo com um gesto (puxar para baixo ou botão de sincronização)
+
+A recolha de preços é automática e diária. Os preços são de referência nacional (catálogo online) — nas lojas físicas podem variar por região.
+
+Sem contas, sem tracking, sem anúncios. Os teus dados ficam apenas no teu dispositivo.

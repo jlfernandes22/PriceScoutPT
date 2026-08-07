@@ -1,1 +1,1 @@
-Comparador de preços dos supermercados portugueses, offline
+Portuguese supermarket price comparison, offline

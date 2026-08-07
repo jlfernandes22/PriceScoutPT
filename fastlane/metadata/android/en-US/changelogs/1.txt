@@ -1,7 +1,7 @@
-Primeira versão do PriceScoutPT:
+First release of PriceScoutPT:
 
-• Catálogo offline de 5 supermercados portugueses (Continente, Lidl, Pingo Doce, Aldi, Auchan)
-• Pesquisa instantânea com filtros
-• Cabaz de compras com comparação de preços entre supermercados
-• Histórico de preços dos últimos 30 dias
-• Sincronização manual e recolha diária automática
+• Offline catalog of 5 Portuguese supermarkets (Continente, Lidl, Pingo Doce, Aldi, Auchan)
+• Instant search with filters
+• Shopping basket with price comparison across supermarkets
+• 30-day price history
+• Manual sync and automatic daily collection
