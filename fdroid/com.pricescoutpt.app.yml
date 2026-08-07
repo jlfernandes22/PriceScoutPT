@@ -7,6 +7,7 @@ SourceCode: https://github.com/jlfernandes22/PriceScoutPT
 IssueTracker: https://github.com/jlfernandes22/PriceScoutPT/issues
 
 AutoName: PriceScoutPT
+
 RepoType: git
 Repo: https://github.com/jlfernandes22/PriceScoutPT
 
@@ -23,14 +24,13 @@ Builds:
     init:
       - cd ../..
       - npm ci --legacy-peer-deps
-    prebuild:
-      - cd ../..
-      - sed -i -e '/jvmToolchain\|JavaVersion/s/17/21/'
-        node_modules/@react-native/gradle-plugin/*/build.gradle.kts
-        node_modules/@react-native/gradle-plugin/react-native-gradle-plugin/src/main/kotlin/com/facebook/react/utils/JdkConfiguratorUtils.kt
     gradle:
       - yes
     output: app/build/outputs/apk/release/app-release.apk
+    prebuild:
+      - cd ../..
+      - sed -i -e '/jvmToolchain\|JavaVersion/s/17/21/' node_modules/@react-native/gradle-plugin/*/build.gradle.kts
+        node_modules/@react-native/gradle-plugin/react-native-gradle-plugin/src/main/kotlin/com/facebook/react/utils/JdkConfiguratorUtils.kt
     scanignore:
       - mobile/node_modules/react-native/sdks/hermesc/linux64-bin/hermesc
       - mobile/node_modules/react-native/ReactAndroid/publish.gradle
@@ -39,6 +39,11 @@ Builds:
       - mobile/node_modules/@react-native-async-storage/async-storage/android/build.gradle
       - mobile/node_modules/react-native-safe-area-context/android/build.gradle
       - mobile/node_modules/react-native-svg/android/build.gradle
+      - mobile/node_modules/expo-font/local-maven-repo
+      - mobile/node_modules/expo-asset/local-maven-repo
+      - mobile/node_modules/expo-keep-awake/local-maven-repo
+      - mobile/node_modules/expo-file-system/local-maven-repo
+      - mobile/node_modules/react-native-sqlite-storage/platforms/android-native/libs
     scandelete:
       - mobile/node_modules
 
