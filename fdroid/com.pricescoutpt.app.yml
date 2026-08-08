@@ -2,7 +2,6 @@ Categories:
   - Market & Price
 License: GPL-3.0-or-later
 AuthorName: PriceScoutPT
-WebSite: https://github.com/jlfernandes22/PriceScoutPT
 SourceCode: https://github.com/jlfernandes22/PriceScoutPT
 IssueTracker: https://github.com/jlfernandes22/PriceScoutPT/issues
 
@@ -18,9 +17,7 @@ Builds:
     subdir: mobile/android/app
     sudo:
       - apt-get update
-      - apt-get install -y curl ca-certificates gnupg
-      - curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
-      - apt-get install -y nodejs
+      - apt-get install -y nodejs npm
     init:
       - cd ../..
       - npm ci --legacy-peer-deps
@@ -29,6 +26,8 @@ Builds:
     output: build/outputs/apk/release/app-release.apk
     prebuild:
       - cd ../..
+      - node -e "const fs=require('fs');const 
+        p=JSON.parse(fs.readFileSync('package.json'));p.expo={autolinking:{android:{buildFromSource:['.*']}}};fs.writeFileSync('package.json',JSON.stringify(p,null,2))"
       - sed -i -e '/jvmToolchain\|JavaVersion/s/17/21/' node_modules/@react-native/gradle-plugin/*/build.gradle.kts
         node_modules/@react-native/gradle-plugin/react-native-gradle-plugin/src/main/kotlin/com/facebook/react/utils/JdkConfiguratorUtils.kt
     scanignore:
@@ -39,20 +38,15 @@ Builds:
       - mobile/node_modules/@react-native-async-storage/async-storage/android/build.gradle
       - mobile/node_modules/react-native-safe-area-context/android/build.gradle
       - mobile/node_modules/react-native-svg/android/build.gradle
-      - mobile/node_modules/expo-font/local-maven-repo
-      - mobile/node_modules/expo-asset/local-maven-repo
-      - mobile/node_modules/expo-keep-awake/local-maven-repo
-      - mobile/node_modules/expo-file-system/local-maven-repo
-      - mobile/node_modules/react-native-sqlite-storage/platforms/android-native/libs
     scandelete:
       - mobile/node_modules
 
 MaintainerNotes: |-
-  React Native/Expo app built following templates/build-react-native.yml: the
-  React Native Gradle plugin is patched to use JDK 21 (buildserver default)
-  instead of 17, node_modules is scandeleted so the prebuilt binaries (Hermes,
-  local Maven repos) are removed from the source scan, and the Gradle files
-  that reference local Maven repos are scanignored.
+  React Native/Expo app built following templates/build-react-native.yml:
+  Expo modules are built from source (autolinking buildFromSource) so no local
+  Maven repos are needed, the React Native Gradle plugin is patched to use
+  JDK 21 (buildserver default) instead of 17, node_modules is scandeleted, and
+  the Gradle files referencing local Maven repos are scanignored.
 
 AutoUpdateMode: Version
 UpdateCheckMode: Tags
