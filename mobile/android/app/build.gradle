@@ -200,3 +200,14 @@ dependencies {
         implementation jscFlavor
     }
 }
+
+androidComponents {
+    onVariants(selector().all()) { variant ->
+        def abiVersionCode = project.findProperty('abiVersionCode')
+        if (abiVersionCode) {
+            variant.outputs.forEach { output ->
+                output.versionCode.set(abiVersionCode.toInteger())
+            }
+        }
+    }
+}
