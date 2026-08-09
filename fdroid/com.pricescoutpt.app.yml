@@ -12,8 +12,8 @@ Repo: https://github.com/jlfernandes22/PriceScoutPT
 
 Builds:
   - versionName: 1.0.0
-    versionCode: 1
-    commit: adac03bc0e3ff32b7fa075744e68afed14171fc7
+    versionCode: 11
+    commit: 3e51d3be022fd83ffdb6458cd849d7a9fc005b50
     subdir: mobile/android/app
     sudo:
       - apt-get update
@@ -40,6 +40,108 @@ Builds:
       - mobile/node_modules/react-native-svg/android/build.gradle
     scandelete:
       - mobile/node_modules
+    gradleprops:
+      - reactNativeArchitectures=armeabi-v7a
+      - abiVersionCode=11
+
+  - versionName: 1.0.0
+    versionCode: 12
+    commit: 3e51d3be022fd83ffdb6458cd849d7a9fc005b50
+    subdir: mobile/android/app
+    sudo:
+      - apt-get update
+      - apt-get install -y nodejs npm
+    init:
+      - cd ../..
+      - npm ci --legacy-peer-deps
+    gradle:
+      - yes
+    output: build/outputs/apk/release/app-release.apk
+    prebuild:
+      - cd ../..
+      - node -e "const fs=require('fs');const 
+        p=JSON.parse(fs.readFileSync('package.json'));p.expo={autolinking:{android:{buildFromSource:['.*']}}};fs.writeFileSync('package.json',JSON.stringify(p,null,2))"
+      - sed -i -e '/jvmToolchain\|JavaVersion/s/17/21/' node_modules/@react-native/gradle-plugin/*/build.gradle.kts
+        node_modules/@react-native/gradle-plugin/react-native-gradle-plugin/src/main/kotlin/com/facebook/react/utils/JdkConfiguratorUtils.kt
+    scanignore:
+      - mobile/node_modules/react-native/sdks/hermesc/linux64-bin/hermesc
+      - mobile/node_modules/react-native/ReactAndroid/publish.gradle
+      - mobile/node_modules/expo-modules-core/android/ExpoModulesCorePlugin.gradle
+      - mobile/node_modules/expo-modules-autolinking/scripts/android/autolinking_implementation.gradle
+      - mobile/node_modules/@react-native-async-storage/async-storage/android/build.gradle
+      - mobile/node_modules/react-native-safe-area-context/android/build.gradle
+      - mobile/node_modules/react-native-svg/android/build.gradle
+    scandelete:
+      - mobile/node_modules
+    gradleprops:
+      - reactNativeArchitectures=arm64-v8a
+      - abiVersionCode=12
+
+  - versionName: 1.0.0
+    versionCode: 13
+    commit: 3e51d3be022fd83ffdb6458cd849d7a9fc005b50
+    subdir: mobile/android/app
+    sudo:
+      - apt-get update
+      - apt-get install -y nodejs npm
+    init:
+      - cd ../..
+      - npm ci --legacy-peer-deps
+    gradle:
+      - yes
+    output: build/outputs/apk/release/app-release.apk
+    prebuild:
+      - cd ../..
+      - node -e "const fs=require('fs');const 
+        p=JSON.parse(fs.readFileSync('package.json'));p.expo={autolinking:{android:{buildFromSource:['.*']}}};fs.writeFileSync('package.json',JSON.stringify(p,null,2))"
+      - sed -i -e '/jvmToolchain\|JavaVersion/s/17/21/' node_modules/@react-native/gradle-plugin/*/build.gradle.kts
+        node_modules/@react-native/gradle-plugin/react-native-gradle-plugin/src/main/kotlin/com/facebook/react/utils/JdkConfiguratorUtils.kt
+    scanignore:
+      - mobile/node_modules/react-native/sdks/hermesc/linux64-bin/hermesc
+      - mobile/node_modules/react-native/ReactAndroid/publish.gradle
+      - mobile/node_modules/expo-modules-core/android/ExpoModulesCorePlugin.gradle
+      - mobile/node_modules/expo-modules-autolinking/scripts/android/autolinking_implementation.gradle
+      - mobile/node_modules/@react-native-async-storage/async-storage/android/build.gradle
+      - mobile/node_modules/react-native-safe-area-context/android/build.gradle
+      - mobile/node_modules/react-native-svg/android/build.gradle
+    scandelete:
+      - mobile/node_modules
+    gradleprops:
+      - reactNativeArchitectures=x86
+      - abiVersionCode=13
+
+  - versionName: 1.0.0
+    versionCode: 14
+    commit: 3e51d3be022fd83ffdb6458cd849d7a9fc005b50
+    subdir: mobile/android/app
+    sudo:
+      - apt-get update
+      - apt-get install -y nodejs npm
+    init:
+      - cd ../..
+      - npm ci --legacy-peer-deps
+    gradle:
+      - yes
+    output: build/outputs/apk/release/app-release.apk
+    prebuild:
+      - cd ../..
+      - node -e "const fs=require('fs');const 
+        p=JSON.parse(fs.readFileSync('package.json'));p.expo={autolinking:{android:{buildFromSource:['.*']}}};fs.writeFileSync('package.json',JSON.stringify(p,null,2))"
+      - sed -i -e '/jvmToolchain\|JavaVersion/s/17/21/' node_modules/@react-native/gradle-plugin/*/build.gradle.kts
+        node_modules/@react-native/gradle-plugin/react-native-gradle-plugin/src/main/kotlin/com/facebook/react/utils/JdkConfiguratorUtils.kt
+    scanignore:
+      - mobile/node_modules/react-native/sdks/hermesc/linux64-bin/hermesc
+      - mobile/node_modules/react-native/ReactAndroid/publish.gradle
+      - mobile/node_modules/expo-modules-core/android/ExpoModulesCorePlugin.gradle
+      - mobile/node_modules/expo-modules-autolinking/scripts/android/autolinking_implementation.gradle
+      - mobile/node_modules/@react-native-async-storage/async-storage/android/build.gradle
+      - mobile/node_modules/react-native-safe-area-context/android/build.gradle
+      - mobile/node_modules/react-native-svg/android/build.gradle
+    scandelete:
+      - mobile/node_modules
+    gradleprops:
+      - reactNativeArchitectures=x86_64
+      - abiVersionCode=14
 
 MaintainerNotes: |-
   React Native/Expo app built following templates/build-react-native.yml:
@@ -48,7 +150,17 @@ MaintainerNotes: |-
   JDK 21 (buildserver default) instead of 17, node_modules is scandeleted, and
   the Gradle files referencing local Maven repos are scanignored.
 
+  ABI split: one build block per ABI, controlled with the
+  reactNativeArchitectures Gradle property; the versionCode is set per ABI
+  with the abiVersionCode Gradle property read by the androidComponents hook
+  in app/build.gradle (10 * %c + 1..4, per the F-Droid ABI split guide).
+
 AutoUpdateMode: Version
 UpdateCheckMode: Tags
+VercodeOperation:
+  - 10 * %c + 1
+  - 10 * %c + 2
+  - 10 * %c + 3
+  - 10 * %c + 4
 CurrentVersion: 1.0.0
-CurrentVersionCode: 1
+CurrentVersionCode: 14
