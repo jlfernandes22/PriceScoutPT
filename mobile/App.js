@@ -3,17 +3,23 @@ import 'react-native-gesture-handler'; // obrigatório antes de qualquer navega�
 import React, { useEffect, useState } from 'react';
 import { StatusBar, View, StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { Provider as PaperProvider, BottomNavigation, ActivityIndicator, Text, Icon } from 'react-native-paper';
+import { NavigationContainer, DefaultTheme as RNDefaultTheme, DarkTheme as RNDarkTheme } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { Provider as PaperProvider, BottomNavigation, ActivityIndicator, Text, Icon, ProgressBar } from 'react-native-paper';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { database } from './src/model';
 import { syncDatabase } from './src/services/sync';
 import { ThemeModeProvider, useAppTheme, spacing } from './src/theme';
+import { M3LoadingIndicator, WavyProgress } from './src/theme/loading';
 
 import SearchScreen from './src/screens/SearchScreen';
 import FavoritesScreen from './src/screens/FavoritesScreen';
 import CompareScreen from './src/screens/CompareScreen';
 import BasketScreen from './src/screens/BasketScreen';
 import OnboardingScreen from './src/screens/OnboardingScreen';
+import ProductHistoryScreen from './src/screens/ProductHistoryScreen';
+
+const Stack = createNativeStackNavigator();
 
 export default function App() {
   return (
@@ -111,12 +117,24 @@ function AppContent() {
             <Text variant="bodyMedium" style={styles.loaderSubtitle}>
               Compara preços dos supermercados portugueses
             </Text>
-            <ActivityIndicator size="large" color={colors.primary} style={styles.loaderSpinner} />
-            <Text variant="bodySmall" style={styles.loaderStatus}>
-              {syncProgress && syncProgress.total > 0
-                ? `A descarregar o catálogo… ${syncProgress.done} de ${syncProgress.total} registos`
-                : 'A preparar o catálogo…'}
-            </Text>
+            {syncProgress && syncProgress.total > 0 ? (
+              <>
+                <ProgressBar
+                  progress={syncProgress.done / syncProgress.total}
+                  color={colors.primary}
+                  style={styles.loaderProgress}
+                />
+                <Text variant="bodySmall" style={styles.loaderStatus}>
+                  {`A descarregar o catálogo… ${syncProgress.done} de ${syncProgress.total} registos`}
+                </Text>
+              </>
+            ) : (
+              <>
+                <M3LoadingIndicator size={40} style={styles.loaderSpinner} />
+                <WavyProgress style={styles.loaderWavy} />
+                <Text variant="bodySmall" style={styles.loaderStatus}>A preparar o catálogo…</Text>
+              </>
+            )}
           </View>
         </PaperProvider>
       </SafeAreaProvider>
@@ -135,18 +153,45 @@ function AppContent() {
   }
 
   // Removido o DatabaseProvider obsoleto!
+  const navTheme = (isDark ? RNDarkTheme : RNDefaultTheme);
+  const navigationTheme = {
+    ...navTheme,
+    colors: {
+      ...navTheme.colors,
+      primary: colors.primary,
+      background: colors.background,
+      card: colors.surface,
+      text: colors.onSurface,
+      border: colors.outlineVariant,
+      notification: colors.error,
+    },
+  };
+
+  const MainTabs = () => (
+    <BottomNavigation
+      navigationState={{ index, routes }}
+      onIndexChange={setIndex}
+      renderScene={renderScene}
+      shifting={true}
+      labeled={true}
+      barStyle={styles.tabBar}
+    />
+  );
+
   return (
     <SafeAreaProvider>
       <PaperProvider theme={theme}>
         <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} />
-        <BottomNavigation
-          navigationState={{ index, routes }}
-          onIndexChange={setIndex}
-          renderScene={renderScene}
-          shifting={true}
-          labeled={true}
-          barStyle={styles.tabBar}
-        />
+        <NavigationContainer theme={navigationTheme}>
+          <Stack.Navigator screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="Main" component={MainTabs} />
+            <Stack.Screen
+              name="ProductHistory"
+              component={ProductHistoryScreen}
+              options={{ animation: 'slide_from_bottom', gestureEnabled: true }}
+            />
+          </Stack.Navigator>
+        </NavigationContainer>
       </PaperProvider>
     </SafeAreaProvider>
   );
@@ -180,6 +225,18 @@ const createStyles = (colors, spacing) => StyleSheet.create({
   },
   loaderSpinner: {
     marginTop: spacing.xl,
+  },
+  loaderProgress: {
+    marginTop: spacing.xl,
+    width: '80%',
+    alignSelf: 'center',
+    height: 6,
+    borderRadius: 3,
+  },
+  loaderWavy: {
+    marginTop: spacing.xl,
+    width: '60%',
+    alignSelf: 'center',
   },
   loaderStatus: {
     color: colors.textMuted,

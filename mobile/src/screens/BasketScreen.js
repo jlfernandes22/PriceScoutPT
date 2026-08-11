@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { View, StyleSheet, ScrollView, FlatList, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Text, IconButton, Chip, FAB, Surface, Divider, ActivityIndicator, Portal, Dialog, Button, TouchableRipple , useTheme } from 'react-native-paper';
+import { Text, IconButton, Chip, FAB, Surface, Divider, Portal, Dialog, Button, TouchableRipple , useTheme } from 'react-native-paper';
 import { Q } from '@nozbe/watermelondb';
 import withObservables from '@nozbe/with-observables';
+import { useNavigation } from '@react-navigation/native';
 import { database } from '../model';
-import ProductHistoryModal from '../components/ProductHistoryModal';
 import { getSupermarket, formatPrice } from '../components/ProductCard';
+import { ShimmerClockProvider, SkeletonRows } from '../theme/loading';
 
 // Cabaz simples: lista de produtos, origem (supermercado) e total.
 // A comparação de preços vive no separador "Comparar".
@@ -14,9 +15,8 @@ const BasketDetails = ({ shoppingList, items, favoriteIds, onToggleFavorite }) =
   const theme = useTheme();
   const colors = theme.colors;
   const styles = createStyles(colors);
+  const navigation = useNavigation();
   const [resolvedItems, setResolvedItems] = useState(null);
-  const [selectedProductForHistory, setSelectedProductForHistory] = useState(null);
-  const [isHistoryVisible, setIsHistoryVisible] = useState(false);
   const [clearDialogVisible, setClearDialogVisible] = useState(false);
 
   // Resolve o produto (nome/preço/supermercado) de cada item de forma reativa ao items.
@@ -99,9 +99,9 @@ const BasketDetails = ({ shoppingList, items, favoriteIds, onToggleFavorite }) =
 
   if (resolvedItems === null) {
     return (
-      <View style={styles.loaderContainer}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
+      <ShimmerClockProvider>
+        <SkeletonRows count={4} thumb={44} />
+      </ShimmerClockProvider>
     );
   }
 
@@ -145,10 +145,7 @@ const BasketDetails = ({ shoppingList, items, favoriteIds, onToggleFavorite }) =
           return (
             <TouchableRipple
               style={styles.itemRow}
-              onPress={() => {
-                setSelectedProductForHistory(r.product);
-                setIsHistoryVisible(true);
-              }}
+              onPress={() => navigation.navigate('ProductHistory', { productId: r.product.id })}
               accessibilityRole="button"
               accessibilityLabel={`Abrir detalhes de ${r.product.name}`}
               accessibilityHint="Abre o histórico de preços do produto"
@@ -221,15 +218,6 @@ const BasketDetails = ({ shoppingList, items, favoriteIds, onToggleFavorite }) =
         }}
         ItemSeparatorComponent={() => <Divider style={styles.rowDivider} />}
         contentContainerStyle={styles.listContent}
-      />
-
-      {/* Modal de Histórico de Preços */}
-      <ProductHistoryModal
-        product={selectedProductForHistory}
-        visible={isHistoryVisible}
-        onDismiss={() => setIsHistoryVisible(false)}
-        isFavorite={selectedProductForHistory ? favoriteIds.has(selectedProductForHistory.id) : false}
-        onToggleFavorite={onToggleFavorite}
       />
 
       <FAB

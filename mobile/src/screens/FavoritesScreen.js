@@ -4,8 +4,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text, IconButton, Surface, Portal, Dialog, Button, TextInput, RadioButton , useTheme } from 'react-native-paper';
 import { Q } from '@nozbe/watermelondb';
 import withObservables from '@nozbe/with-observables';
+import { useNavigation } from '@react-navigation/native';
 import { database } from '../model';
-import ProductHistoryModal from '../components/ProductHistoryModal';
 import ProductCard, { getSupermarket } from '../components/ProductCard';
 
 // Card de Favorito Reativo que observa as atualizações do produto correspondente
@@ -37,8 +37,7 @@ const FavoritesScreen = ({ favorites, shoppingLists }) => {
   const colors = theme.colors;
   const styles = createStyles(colors);
   // Estados para o Modal de Histórico de Preços
-  const [selectedProductForHistory, setSelectedProductForHistory] = useState(null);
-  const [isHistoryVisible, setIsHistoryVisible] = useState(false);
+  const navigation = useNavigation();
 
   // Estados para o Modal de Adicionar ao Cabaz
   const [isDialogVisible, setIsDialogVisible] = useState(false);
@@ -126,8 +125,7 @@ const FavoritesScreen = ({ favorites, shoppingLists }) => {
   };
 
   const handleViewHistory = (product) => {
-    setSelectedProductForHistory(product);
-    setIsHistoryVisible(true);
+    navigation.navigate('ProductHistory', { productId: product.id });
   };
 
   const toggleFavoriteFromHistory = async (product, isFav) => {
@@ -142,7 +140,7 @@ const FavoritesScreen = ({ favorites, shoppingLists }) => {
             await fav.destroyPermanently();
           }
         });
-        setIsHistoryVisible(false);
+        navigation.goBack();
       } catch (e) {
         console.error("[FavoritesScreen Toggle History Error]:", e);
       }
@@ -176,15 +174,6 @@ const FavoritesScreen = ({ favorites, shoppingLists }) => {
             </Text>
           </View>
         )}
-      />
-
-      {/* Modal de Histórico de Preços */}
-      <ProductHistoryModal
-        product={selectedProductForHistory}
-        visible={isHistoryVisible}
-        onDismiss={() => setIsHistoryVisible(false)}
-        isFavorite={true}
-        onToggleFavorite={toggleFavoriteFromHistory}
       />
 
       {/* Diálogo de Adicionar ao Cabaz */}

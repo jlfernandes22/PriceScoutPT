@@ -2,7 +2,9 @@ import React, { useState, memo } from 'react';
 import { View, StyleSheet, Image } from 'react-native';
 import { useTheme } from 'react-native-paper';
 import { Card, Text, IconButton, Badge } from 'react-native-paper';
+import Animated from 'react-native-reanimated';
 import { supermarketBrands, DEFAULT_BRAND_COLOR } from '../theme/tokens';
+import { useM3PressScale, useReduceMotion } from '../theme/motion';
 
 // Identidade visual dos supermercados (fonte única para toda a app)
 export const SUPERMARKET_BRANDS = supermarketBrands;
@@ -16,11 +18,12 @@ export const formatPrice = (price) => {
   return Number.isFinite(value) && value > 0 ? `${value.toFixed(2)} €` : '—';
 };
 
-// Imagem do produto com fallback elegante para quando não existe imagem
-export const ProductImage = ({ url, color, size }) => {
+// Imagem do produto com fallback elegante e shared transition (hero)
+export const ProductImage = ({ url, color, size, sharedTag }) => {
   const [failed, setFailed] = useState(false);
   const theme = useTheme();
   const styles = createStyles(theme.colors);
+  const reduceMotion = useReduceMotion();
 
   if (!url || failed) {
     return (
@@ -34,12 +37,26 @@ export const ProductImage = ({ url, color, size }) => {
     );
   }
 
+  if (reduceMotion || !sharedTag) {
+    return (
+      <Image
+        source={{ uri: url }}
+        style={{ width: size, height: size, borderRadius: 10 }}
+        resizeMode="cover"
+        resizeMethod="resize"
+        onError={() => setFailed(true)}
+        accessible={false}
+        importantForAccessibility="no-hide-descendants"
+      />
+    );
+  }
+
   return (
-    <Image
+    <Animated.Image
+      sharedTransitionTag={sharedTag}
       source={{ uri: url }}
       style={{ width: size, height: size, borderRadius: 10 }}
       resizeMode="cover"
-      resizeMethod="resize"
       onError={() => setFailed(true)}
       accessible={false}
       importantForAccessibility="no-hide-descendants"
@@ -60,20 +77,24 @@ const ProductCard = ({
   const styles = createStyles(colors);
   const brandInfo = getSupermarket(product.supermarketId);
   const imgSize = compact ? 56 : 72;
+  const { style: pressStyle, onPressIn, onPressOut } = useM3PressScale();
 
   return (
-    <Card
-      style={styles.card}
-      mode="outlined"
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={`${product.name}, ${formatPrice(product.price)}, ${brandInfo.name}`}
-      accessibilityHint="Abre o histórico de preços do produto"
-    >
-      <View style={styles.row}>
-        <View style={[styles.imageWrap, { borderColor: brandInfo.color }]} accessible={false} importantForAccessibility="no-hide-descendants">
-          <ProductImage url={product.imageUrl} color={brandInfo.color} size={imgSize} />
-        </View>
+    <Animated.View style={pressStyle}>
+      <Card
+        style={styles.card}
+        mode="outlined"
+        onPress={onPress}
+        onPressIn={onPressIn}
+        onPressOut={onPressOut}
+        accessibilityRole="button"
+        accessibilityLabel={`${product.name}, ${formatPrice(product.price)}, ${brandInfo.name}`}
+        accessibilityHint="Abre o histórico de preços do produto"
+      >
+        <View style={styles.row}>
+          <View style={[styles.imageWrap, { borderColor: brandInfo.color }]} accessible={false} importantForAccessibility="no-hide-descendants">
+            <ProductImage url={product.imageUrl} color={brandInfo.color} size={imgSize} sharedTag={`product-image-${product.id}`} />
+          </View>
 
         <View style={styles.info}>
           <Text variant="titleSmall" style={styles.name} numberOfLines={2}>
@@ -122,8 +143,9 @@ const ProductCard = ({
             }}
           />
         </View>
-      </View>
-    </Card>
+        </View>
+      </Card>
+    </Animated.View>
   );
 };
 

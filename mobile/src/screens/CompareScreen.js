@@ -2,13 +2,14 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { View, StyleSheet, ScrollView, SectionList, Share, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Text, IconButton, Button, Chip, Surface, Divider, Badge, ActivityIndicator, Card, TouchableRipple , useTheme } from 'react-native-paper';
+import { Text, IconButton, Button, Chip, Surface, Divider, Badge, Card, TouchableRipple , useTheme } from 'react-native-paper';
 import { Q } from '@nozbe/watermelondb';
 import withObservables from '@nozbe/with-observables';
+import { useNavigation } from '@react-navigation/native';
 import { database } from '../model';
 import { findLocalFuzzyMatch } from '../utils/fuzzyMatch';
-import ProductHistoryModal from '../components/ProductHistoryModal';
 import { SUPERMARKET_BRANDS, getSupermarket, formatPrice } from '../components/ProductCard';
+import { ShimmerClockProvider, SkeletonBlock, SkeletonRows } from '../theme/loading';
 
 const DISCLAIMER_KEY = '@compare_disclaimer_seen';
 
@@ -21,8 +22,7 @@ const ComparisonDetails = ({ shoppingList, items, favoriteIds, onToggleFavorite 
   const [comparisonData, setComparisonData] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  const [selectedProductForHistory, setSelectedProductForHistory] = useState(null);
-  const [isHistoryVisible, setIsHistoryVisible] = useState(false);
+  const navigation = useNavigation();
   const [showDisclaimer, setShowDisclaimer] = useState(false);
 
   // Mostra a nota de comparação aproximada apenas na primeira vez.
@@ -213,11 +213,8 @@ const ComparisonDetails = ({ shoppingList, items, favoriteIds, onToggleFavorite 
   const openHistory = async (item) => {
     if (!item.available || !item.productId) return;
     try {
-      const prod = await database.collections.get('products').find(item.productId);
-      if (prod) {
-        setSelectedProductForHistory(prod);
-        setIsHistoryVisible(true);
-      }
+      await database.collections.get('products').find(item.productId);
+      navigation.navigate('ProductHistory', { productId: item.productId });
     } catch (e) {
       console.error("[CompareScreen fetch product for history error]:", e);
     }
@@ -275,10 +272,17 @@ const ComparisonDetails = ({ shoppingList, items, favoriteIds, onToggleFavorite 
 
   if (loading && comparisonData.length === 0) {
     return (
-      <View style={styles.loaderContainer}>
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text variant="bodyMedium" style={styles.loaderText}>A analisar e a comparar preços locais...</Text>
-      </View>
+      <ShimmerClockProvider>
+        <View style={styles.detailsContainer}>
+          <View style={styles.skeletonSummaryRow}>
+            {[0, 1, 2].map((i) => (
+              <SkeletonBlock key={i} width={150} height={110} borderRadius={8} style={styles.skeletonSummaryCard} />
+            ))}
+          </View>
+          <SkeletonRows count={4} thumb={40} />
+          <Text variant="bodyMedium" style={styles.skeletonLabel}>A analisar e a comparar preços locais...</Text>
+        </View>
+      </ShimmerClockProvider>
     );
   }
 
@@ -437,13 +441,6 @@ const ComparisonDetails = ({ shoppingList, items, favoriteIds, onToggleFavorite 
         contentContainerStyle={styles.listContent}
       />
 
-      <ProductHistoryModal
-        product={selectedProductForHistory}
-        visible={isHistoryVisible}
-        onDismiss={() => setIsHistoryVisible(false)}
-        isFavorite={selectedProductForHistory ? favoriteIds.has(selectedProductForHistory.id) : false}
-        onToggleFavorite={onToggleFavorite}
-      />
     </View>
   );
 };
@@ -794,16 +791,19 @@ const createStyles = (colors) => StyleSheet.create({
     marginTop: 8,
     lineHeight: 20,
   },
-  loaderContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 32,
+  skeletonSummaryRow: {
+    flexDirection: 'row',
+    paddingHorizontal: 12,
+    paddingVertical: 12,
   },
-  loaderText: {
+  skeletonSummaryCard: {
+    marginHorizontal: 4,
+  },
+  skeletonLabel: {
     marginTop: 12,
-    color: colors.textMuted,
+    color: colors.outline,
     fontWeight: '500',
+    textAlign: 'center',
   },
 });
 

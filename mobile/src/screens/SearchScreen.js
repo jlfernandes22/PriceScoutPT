@@ -4,9 +4,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Searchbar, Text, IconButton, Portal, Dialog, Button, TextInput, RadioButton, Surface, Chip, Icon, Snackbar , useTheme } from 'react-native-paper';
 import { Q } from '@nozbe/watermelondb';
 import withObservables from '@nozbe/with-observables';
+import { useNavigation } from '@react-navigation/native';
 import { database } from '../model';
 import { syncDatabase } from '../services/sync';
-import ProductHistoryModal from '../components/ProductHistoryModal';
 import SettingsModal from '../components/SettingsModal';
 import ProductCard, { SUPERMARKET_BRANDS, getSupermarket } from '../components/ProductCard';
 
@@ -212,10 +212,8 @@ const SearchScreen = ({ shoppingLists, favorites, categories }) => {
   const [isCreatingNewList, setIsCreatingNewList] = useState(false);
   const [newListName, setNewListName] = useState('');
 
-  const [selectedProductForHistory, setSelectedProductForHistory] = useState(null);
-  const [isHistoryVisible, setIsHistoryVisible] = useState(false);
-
   const [isSettingsVisible, setIsSettingsVisible] = useState(false);
+  const navigation = useNavigation();
 
   const [visibleLimit, setVisibleLimit] = useState(PAGE_SIZE);
 
@@ -336,9 +334,8 @@ const SearchScreen = ({ shoppingLists, favorites, categories }) => {
   }, []);
 
   const handleViewHistory = useCallback((product) => {
-    setSelectedProductForHistory(product);
-    setIsHistoryVisible(true);
-  }, []);
+    navigation.navigate('ProductHistory', { productId: product.id });
+  }, [navigation]);
 
   const handleChangeSupermarket = useCallback((id) => {
     setSelectedSupermarket(id);
@@ -409,14 +406,6 @@ const SearchScreen = ({ shoppingLists, favorites, categories }) => {
         onToggleFavorite={handleToggleFavorite}
         limit={visibleLimit}
         onLoadMore={handleLoadMore}
-      />
-
-      <ProductHistoryModal
-        product={selectedProductForHistory}
-        visible={isHistoryVisible}
-        onDismiss={() => setIsHistoryVisible(false)}
-        isFavorite={selectedProductForHistory ? favoriteIds.has(selectedProductForHistory.id) : false}
-        onToggleFavorite={handleToggleFavorite}
       />
 
       <SettingsModal
