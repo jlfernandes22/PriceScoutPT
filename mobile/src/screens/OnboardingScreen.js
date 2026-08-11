@@ -6,7 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width } = Dimensions.get('window');
 
-const SLIDES = [
+const getSlides = (colors) => [
   {
     title: 'Bem-vindo ao PriceScoutPT',
     icon: 'hand-wave',
@@ -52,7 +52,7 @@ const OnboardingScreen = ({ onComplete }) => {
   const [currentSlide, setCurrentSlide] = useState(0);
 
   const handleNext = () => {
-    if (currentSlide < SLIDES.length - 1) {
+    if (currentSlide < slides.length - 1) {
       setCurrentSlide(prev => prev + 1);
     } else {
       handleComplete();
@@ -70,7 +70,8 @@ const OnboardingScreen = ({ onComplete }) => {
     }
   };
 
-  const activeSlide = SLIDES[currentSlide];
+  const slides = getSlides(colors);
+  const activeSlide = slides[currentSlide];
 
   return (
     <SafeAreaView style={styles.container}>
@@ -99,10 +100,10 @@ const OnboardingScreen = ({ onComplete }) => {
       <View
         style={styles.dotsRow}
         accessible
-        accessibilityLabel={`Página ${currentSlide + 1} de ${SLIDES.length}: ${activeSlide.title}`}
+        accessibilityLabel={`Página ${currentSlide + 1} de ${slides.length}: ${activeSlide.title}`}
         importantForAccessibility="yes"
       >
-        {SLIDES.map((_, index) => (
+        {slides.map((_, index) => (
           <View 
             key={index} 
             style={[
@@ -117,7 +118,7 @@ const OnboardingScreen = ({ onComplete }) => {
 
       {/* Barra de Ações Inferior */}
       <View style={styles.footerRow}>
-        {currentSlide < SLIDES.length - 1 ? (
+        {currentSlide < slides.length - 1 ? (
           <>
             <Button 
               mode="text" 

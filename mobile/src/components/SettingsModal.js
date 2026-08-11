@@ -18,6 +18,7 @@ const formatLastScrape = (iso) => {
 const appVersion = Constants.expoConfig?.version || '1.0.0';
 
 const SettingsModal = ({ visible, onDismiss }) => {
+  const { mode: themeMode, setMode: setThemeMode } = useAppTheme();
   const theme = useTheme();
   const colors = theme.colors;
   const styles = createStyles(colors);
