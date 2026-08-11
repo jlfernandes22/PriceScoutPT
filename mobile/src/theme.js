@@ -1,51 +1,30 @@
-import { MD3LightTheme } from 'react-native-paper';
+// SHIM de compatibilidade (temporário): os ecrãs ainda importam `{ colors }`
+// daqui até ao "color pass" (passo 5 da migração MD3). Valores derivados
+// dos tokens — o objetivo é migrar tudo para useTheme() e eliminar este ficheiro.
+import { lightColors, spacing, shape } from './theme/tokens';
 
-// Design tokens globais do PriceScoutPT.
-// Todas as cores, espaçamentos e raios devem vir daqui — sem hex mágicos espalhados.
 export const colors = {
-  primary: '#0050AA',
-  primaryContainer: '#E3F2FD',
-  secondary: '#003A70',
-  success: '#1E7B34',
-  successContainer: '#E2F0D9',
-  danger: '#C62828',
-  dangerContainer: '#FCE4D6',
-  warning: '#8F4700',
-  background: '#F7F8FA',
-  surface: '#FFFFFF',
-  surfaceVariant: '#F5F5F5',
-  border: '#EAEAEA',
-  borderStrong: '#8F8F8F',
-  textPrimary: '#111111',
-  textSecondary: '#555555',
-  textMuted: '#636363',
-  gold: '#FFD700',
+  ...lightColors,
+  primary: lightColors.primary,
+  primaryContainer: lightColors.primaryContainer,
+  secondary: lightColors.secondary,
+  success: lightColors.tertiary,
+  successContainer: lightColors.tertiaryContainer,
+  danger: lightColors.error,
+  dangerContainer: lightColors.errorContainer,
+  warning: lightColors.onErrorContainer,
+  background: lightColors.background,
+  surface: lightColors.surface,
+  surfaceVariant: lightColors.surfaceVariant,
+  border: lightColors.outlineVariant,
+  borderStrong: lightColors.outline,
+  textPrimary: lightColors.onSurface,
+  textSecondary: lightColors.onSurfaceVariant,
+  textMuted: lightColors.outline,
+  gold: lightColors.tertiary,
 };
 
-export const spacing = {
-  xs: 4,
-  sm: 8,
-  md: 12,
-  lg: 16,
-  xl: 24,
-};
+export const spacing = spacing;
+export const radius = shape;
 
-export const radius = {
-  sm: 6,
-  md: 10,
-  lg: 12,
-  xl: 16,
-};
-
-export const paperTheme = {
-  ...MD3LightTheme,
-  colors: {
-    ...MD3LightTheme.colors,
-    primary: colors.primary,
-    secondaryContainer: colors.primaryContainer,
-    background: colors.background,
-    surface: colors.surface,
-    error: colors.danger,
-  },
-  roundness: 3,
-};
+export { lightTheme as paperTheme } from './theme/paperTheme';

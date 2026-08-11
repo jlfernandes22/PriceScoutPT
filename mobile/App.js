@@ -1,3 +1,5 @@
+import 'react-native-gesture-handler'; // obrigatório antes de qualquer navegação
+
 import React, { useEffect, useState } from 'react';
 import { StatusBar, View, StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -5,7 +7,7 @@ import { Provider as PaperProvider, BottomNavigation, ActivityIndicator, Text, I
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { database } from './src/model';
 import { syncDatabase } from './src/services/sync';
-import { paperTheme, colors, spacing } from './src/theme';
+import { ThemeModeProvider, useAppTheme, spacing } from './src/theme';
 
 import SearchScreen from './src/screens/SearchScreen';
 import FavoritesScreen from './src/screens/FavoritesScreen';
@@ -15,11 +17,16 @@ import OnboardingScreen from './src/screens/OnboardingScreen';
 
 export default function App() {
   return (
-    <AppContent />
+    <ThemeModeProvider>
+      <AppContent />
+    </ThemeModeProvider>
   );
 }
 
 function AppContent() {
+  const { theme, isDark } = useAppTheme();
+  const colors = theme.colors;
+  const styles = createStyles(colors, spacing);
   const [isLoading, setIsLoading] = useState(true);
   const [hasOnboarded, setHasOnboarded] = useState(false);
   const [syncProgress, setSyncProgress] = useState(null);
@@ -94,8 +101,8 @@ function AppContent() {
   if (isLoading) {
     return (
       <SafeAreaProvider>
-        <PaperProvider theme={paperTheme}>
-          <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
+        <PaperProvider theme={theme}>
+          <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} />
           <View style={styles.loaderContainer}>
             <View style={styles.loaderLogo}>
               <Icon source="cart" size={44} color={colors.surface} />
@@ -119,8 +126,8 @@ function AppContent() {
   if (!hasOnboarded) {
     return (
       <SafeAreaProvider>
-        <PaperProvider theme={paperTheme}>
-          <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
+        <PaperProvider theme={theme}>
+          <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} />
           <OnboardingScreen onComplete={runSync} />
         </PaperProvider>
       </SafeAreaProvider>
@@ -130,8 +137,8 @@ function AppContent() {
   // Removido o DatabaseProvider obsoleto!
   return (
     <SafeAreaProvider>
-      <PaperProvider theme={paperTheme}>
-        <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
+      <PaperProvider theme={theme}>
+        <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} />
         <BottomNavigation
           navigationState={{ index, routes }}
           onIndexChange={setIndex}
@@ -145,7 +152,7 @@ function AppContent() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors, spacing) => StyleSheet.create({
   loaderContainer: {
     flex: 1,
     alignItems: 'center',
