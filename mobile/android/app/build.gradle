@@ -105,28 +105,14 @@ android {
             keyPassword 'android'
         }
     }
-    // Keystore de release (v1). As credenciais vivem em keystore.properties
-    // (ignorado pelo git) — sem ele, o release volta a assinar com a debug.
-    def keystorePropertiesFile = rootProject.file('keystore.properties')
-    def keystoreProperties = new Properties()
-    def hasReleaseKeystore = keystorePropertiesFile.exists()
-    if (hasReleaseKeystore) {
-        keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
-        signingConfigs {
-            release {
-                storeFile file(keystoreProperties['storeFile'])
-                storePassword keystoreProperties['storePassword']
-                keyAlias keystoreProperties['keyAlias']
-                keyPassword keystoreProperties['keyPassword']
-            }
-        }
-    }
     buildTypes {
         debug {
             signingConfig signingConfigs.debug
         }
         release {
-            signingConfig hasReleaseKeystore ? signingConfigs.release : signingConfigs.debug
+            // Caution! In production, you need to generate your own keystore file.
+            // see https://reactnative.dev/docs/signed-apk-android.
+            signingConfig signingConfigs.debug
             def enableShrinkResources = findProperty('android.enableShrinkResourcesInReleaseBuilds') ?: 'false'
             shrinkResources enableShrinkResources.toBoolean()
             minifyEnabled enableMinifyInReleaseBuilds
@@ -143,12 +129,6 @@ android {
     }
     androidResources {
         ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:!CVS:!thumbs.db:!picasa.ini:!*~'
-    }
-    // F-Droid exige que o APK não inclua o bloco "Dependency metadata" no
-    // signing block (dados encriptados para a Play Store, inverificáveis).
-    dependenciesInfo {
-        includeInApk = false
-        includeInBundle = false
     }
 }
 
@@ -201,6 +181,37 @@ dependencies {
     }
 }
 
+// Assinatura de release (v2): as credenciais vivem em keystore.properties
+// (ignorado pelo git) — sem ele, o release volta a assinar com a debug.
+def keystorePropertiesFile = rootProject.file('keystore.properties')
+def keystoreProperties = new Properties()
+def hasReleaseKeystore = keystorePropertiesFile.exists()
+if (hasReleaseKeystore) {
+    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+}
+
+android {
+    signingConfigs {
+        release {
+            if (hasReleaseKeystore) {
+                storeFile file(keystoreProperties['storeFile'])
+                storePassword keystoreProperties['storePassword']
+                keyAlias keystoreProperties['keyAlias']
+                keyPassword keystoreProperties['keyPassword']
+            }
+        }
+    }
+    buildTypes {
+        release {
+            if (hasReleaseKeystore) {
+                signingConfig signingConfigs.release
+            }
+        }
+    }
+}
+
+// Hook F-Droid ABI split: -PabiVersionCode define o versionCode do APK
+// (10 * %c + 1..4 por ABI). Sem a propriedade, mantém o versionCode 1.
 androidComponents {
     onVariants(selector().all()) { variant ->
         def abiVersionCode = project.findProperty('abiVersionCode')
