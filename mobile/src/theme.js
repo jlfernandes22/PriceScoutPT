@@ -24,7 +24,7 @@ export const colors = {
   gold: lightColors.tertiary,
 };
 
-export const spacing = spacing;
-export const radius = shape;
+export { spacing };
+export { shape as radius } from './theme/tokens';
 
 export { lightTheme as paperTheme } from './theme/paperTheme';
