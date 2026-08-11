@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, Modal as RNModal, ScrollView } from 'react-native';
-import { Portal, Modal, Dialog, Surface, Text, IconButton, Divider, Button, ActivityIndicator, Snackbar } from 'react-native-paper';
+import { View, StyleSheet, ScrollView } from 'react-native';
+import { Portal, Modal, Dialog, Surface, Text, IconButton, Divider, Button, ActivityIndicator, Snackbar, SegmentedButtons , useTheme } from 'react-native-paper';
 import axios from 'axios';
 import Constants from 'expo-constants';
 import { database } from '../model';
-import { colors } from '../theme';
 import { API_BASE_URL } from '../config';
+import { useAppTheme } from '../theme';
 import { syncDatabase } from '../services/sync';
 
 const formatLastScrape = (iso) => {
@@ -18,6 +18,9 @@ const formatLastScrape = (iso) => {
 const appVersion = Constants.expoConfig?.version || '1.0.0';
 
 const SettingsModal = ({ visible, onDismiss }) => {
+  const theme = useTheme();
+  const colors = theme.colors;
+  const styles = createStyles(colors);
   const [loading, setLoading] = useState(false);
   const [loadingText, setLoadingText] = useState('');
   const [syncingNow, setSyncingNow] = useState(false);
@@ -145,6 +148,24 @@ const SettingsModal = ({ visible, onDismiss }) => {
 
             <Divider style={styles.divider} />
 
+            {/* Secção: Tema */}
+            <Text variant="titleSmall" style={styles.sectionLabel}>Tema</Text>
+            <SegmentedButtons
+              value={themeMode}
+              onValueChange={setThemeMode}
+              buttons={[
+                { value: 'system', label: 'Sistema', icon: 'theme-light-dark' },
+                { value: 'light', label: 'Claro', icon: 'white-balance-sunny' },
+                { value: 'dark', label: 'Escuro', icon: 'weather-night' },
+              ]}
+              density="small"
+              style={styles.themeSegments}
+              accessibilityLabel="Modo de tema"
+              accessibilityHint="Escolhe o tema da aplicação: sistema, claro ou escuro"
+            />
+
+            <Divider style={styles.divider} />
+
             {/* Secção: Manutenção de Dados */}
             <Text variant="titleSmall" style={styles.sectionLabel}>Manutenção de Dados</Text>
 
@@ -197,14 +218,12 @@ const SettingsModal = ({ visible, onDismiss }) => {
         </Surface>
       </Modal>
 
-      <RNModal visible={loading} transparent={true} animationType="fade">
-        <View style={styles.overlayBg}>
-          <Surface style={styles.overlayContainer} elevation={4}>
-            <ActivityIndicator size="large" color={colors.primary} />
-            <Text variant="bodyLarge" style={styles.overlayText}>{loadingText}</Text>
-          </Surface>
-        </View>
-      </RNModal>
+      <Modal visible={loading} onDismiss={() => {}} dismissable={false} contentContainerStyle={styles.overlayContent}>
+        <Surface style={styles.overlayContainer} elevation={4}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text variant="bodyLarge" style={styles.overlayText}>{loadingText}</Text>
+        </Surface>
+      </Modal>
 
       <Snackbar
         visible={syncMsg !== ''}
@@ -241,7 +260,7 @@ const SettingsModal = ({ visible, onDismiss }) => {
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors) => StyleSheet.create({
   modalContent: {
     padding: 20,
     alignItems: 'center',
@@ -316,6 +335,9 @@ const styles = StyleSheet.create({
   divider: {
     marginVertical: 14,
   },
+  themeSegments: {
+    marginTop: 4,
+  },
   aboutCard: {
     backgroundColor: colors.surfaceVariant,
     borderRadius: 8,
@@ -339,9 +361,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
     lineHeight: 18,
   },
-  overlayBg: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+  overlayContent: {
     alignItems: 'center',
     justifyContent: 'center',
   },

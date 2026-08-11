@@ -1,21 +1,23 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { View, StyleSheet, ScrollView, SectionList, Share, Image, Pressable } from 'react-native';
+import { View, StyleSheet, ScrollView, SectionList, Share, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Text, IconButton, Button, Chip, Surface, Divider, Badge, ActivityIndicator, Card } from 'react-native-paper';
+import { Text, IconButton, Button, Chip, Surface, Divider, Badge, ActivityIndicator, Card, TouchableRipple , useTheme } from 'react-native-paper';
 import { Q } from '@nozbe/watermelondb';
 import withObservables from '@nozbe/with-observables';
 import { database } from '../model';
 import { findLocalFuzzyMatch } from '../utils/fuzzyMatch';
 import ProductHistoryModal from '../components/ProductHistoryModal';
 import { SUPERMARKET_BRANDS, getSupermarket, formatPrice } from '../components/ProductCard';
-import { colors } from '../theme';
 
 const DISCLAIMER_KEY = '@compare_disclaimer_seen';
 
 // Comparador de preços: fuzzy-match local entre supermercados e custo total
 // de cada um, mostrando qual é o mais barato para a lista atual.
 const ComparisonDetails = ({ shoppingList, items, favoriteIds, onToggleFavorite }) => {
+  const theme = useTheme();
+  const colors = theme.colors;
+  const styles = createStyles(colors);
   const [comparisonData, setComparisonData] = useState([]);
   const [loading, setLoading] = useState(false);
 
@@ -383,8 +385,8 @@ const ComparisonDetails = ({ shoppingList, items, favoriteIds, onToggleFavorite 
           </Surface>
         )}
         renderItem={({ item }) => (
-          <Pressable
-            style={({ pressed }) => [styles.itemRow, item.available && pressed && styles.itemRowPressed]}
+          <TouchableRipple
+            style={styles.itemRow}
             disabled={!item.available}
             onPress={() => openHistory(item)}
             accessibilityRole="button"
@@ -429,7 +431,7 @@ const ComparisonDetails = ({ shoppingList, items, favoriteIds, onToggleFavorite 
                 <Text variant="bodyMedium" style={styles.itemUnavailable}>Indisponível</Text>
               )}
             </View>
-          </Pressable>
+          </TouchableRipple>
         )}
         ItemSeparatorComponent={() => <Divider style={styles.rowDivider} />}
         contentContainerStyle={styles.listContent}
@@ -452,6 +454,9 @@ const enhance = withObservables(['shoppingList'], ({ shoppingList }) => ({
 const EnhancedComparisonDetails = enhance(ComparisonDetails);
 
 const CompareScreen = ({ shoppingLists, favorites }) => {
+  const theme = useTheme();
+  const colors = theme.colors;
+  const styles = createStyles(colors);
   const [activeListId, setActiveListId] = useState('');
 
   const favoriteIds = useMemo(() => {
@@ -537,7 +542,7 @@ const CompareScreen = ({ shoppingLists, favorites }) => {
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
@@ -718,9 +723,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
     backgroundColor: colors.surface,
-  },
-  itemRowPressed: {
-    backgroundColor: colors.surfaceVariant,
   },
   itemThumb: {
     width: 40,

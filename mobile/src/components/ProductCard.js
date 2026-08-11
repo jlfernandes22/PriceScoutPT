@@ -1,19 +1,14 @@
 import React, { useState, memo } from 'react';
 import { View, StyleSheet, Image } from 'react-native';
-import { colors } from '../theme';
+import { useTheme } from 'react-native-paper';
 import { Card, Text, IconButton, Badge } from 'react-native-paper';
+import { supermarketBrands, DEFAULT_BRAND_COLOR } from '../theme/tokens';
 
 // Identidade visual dos supermercados (fonte única para toda a app)
-export const SUPERMARKET_BRANDS = {
-  '00000000-0000-0000-0000-000000000001': { name: 'Continente', color: colors.danger },
-  '00000000-0000-0000-0000-000000000002': { name: 'Lidl', color: '#0050AA' },
-  '00000000-0000-0000-0000-000000000003': { name: 'Pingo Doce', color: '#2B8C3D' },
-  '00000000-0000-0000-0000-000000000004': { name: 'Aldi', color: '#003A70' },
-  '00000000-0000-0000-0000-000000000005': { name: 'Auchan', color: '#E4002B' },
-};
+export const SUPERMARKET_BRANDS = supermarketBrands;
 
 export const getSupermarket = (id) =>
-  SUPERMARKET_BRANDS[id] || { name: 'Supermercado', color: colors.textMuted };
+  SUPERMARKET_BRANDS[id] || { name: 'Supermercado', color: DEFAULT_BRAND_COLOR };
 
 export const formatPrice = (price) => {
   const value = parseFloat(price);
@@ -24,6 +19,8 @@ export const formatPrice = (price) => {
 // Imagem do produto com fallback elegante para quando não existe imagem
 export const ProductImage = ({ url, color, size }) => {
   const [failed, setFailed] = useState(false);
+  const theme = useTheme();
+  const styles = createStyles(theme.colors);
 
   if (!url || failed) {
     return (
@@ -58,6 +55,9 @@ const ProductCard = ({
   onPress,
   compact = false,
 }) => {
+  const theme = useTheme();
+  const colors = theme.colors;
+  const styles = createStyles(colors);
   const brandInfo = getSupermarket(product.supermarketId);
   const imgSize = compact ? 56 : 72;
 
@@ -98,7 +98,7 @@ const ProductCard = ({
         <View style={styles.actions}>
           <IconButton
             icon={isFavorite ? 'heart' : 'heart-outline'}
-            iconColor={isFavorite ? colors.danger : colors.borderStrong}
+            iconColor={isFavorite ? colors.error : colors.outline}
             size={22}
             style={styles.actionIcon}
             accessibilityLabel={isFavorite ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}
@@ -127,11 +127,11 @@ const ProductCard = ({
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors) => StyleSheet.create({
   card: {
     marginBottom: 10,
     backgroundColor: colors.surface,
-    borderColor: colors.border,
+    borderColor: colors.outlineVariant,
     borderRadius: 14,
     overflow: 'hidden',
   },
@@ -163,11 +163,11 @@ const styles = StyleSheet.create({
   },
   name: {
     fontWeight: '600',
-    color: colors.textPrimary,
+    color: colors.onSurface,
     marginBottom: 2,
   },
   brand: {
-    color: colors.textMuted,
+    color: colors.outline,
     marginBottom: 6,
   },
   bottomRow: {

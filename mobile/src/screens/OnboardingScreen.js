@@ -1,9 +1,8 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Surface, Text, Button, Avatar, IconButton } from 'react-native-paper';
+import { Surface, Text, Button, Avatar, IconButton , useTheme } from 'react-native-paper';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { colors } from '../theme';
 
 const { width } = Dimensions.get('window');
 
@@ -47,6 +46,9 @@ const SLIDES = [
 ];
 
 const OnboardingScreen = ({ onComplete }) => {
+  const theme = useTheme();
+  const colors = theme.colors;
+  const styles = createStyles(colors);
   const [currentSlide, setCurrentSlide] = useState(0);
 
   const handleNext = () => {
@@ -152,7 +154,7 @@ const OnboardingScreen = ({ onComplete }) => {
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,

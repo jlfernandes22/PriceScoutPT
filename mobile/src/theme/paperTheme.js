@@ -10,6 +10,14 @@ export const createPaperTheme = (isDark) => {
     colors: {
       ...base.colors,
       ...colors,
+      // Papéis semânticos da app (alias MD3 — sem hex aqui)
+      success: colors.tertiary,
+      onSuccess: colors.onTertiary,
+      successContainer: colors.tertiaryContainer,
+      onSuccessContainer: colors.onTertiaryContainer,
+      danger: colors.error,
+      warning: colors.onErrorContainer,
+      gold: colors.tertiary,
       // Paper v5 espera estes papéis extra (mantidos com os valores da seed)
       surfaceDisabled: colors.onSurface,
       onSurfaceDisabled: colors.outline,

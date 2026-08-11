@@ -1,13 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, FlatList, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Text, IconButton, Surface, Portal, Dialog, Button, TextInput, RadioButton } from 'react-native-paper';
+import { Text, IconButton, Surface, Portal, Dialog, Button, TextInput, RadioButton , useTheme } from 'react-native-paper';
 import { Q } from '@nozbe/watermelondb';
 import withObservables from '@nozbe/with-observables';
 import { database } from '../model';
 import ProductHistoryModal from '../components/ProductHistoryModal';
 import ProductCard, { getSupermarket } from '../components/ProductCard';
-import { colors } from '../theme';
 
 // Card de Favorito Reativo que observa as atualizações do produto correspondente
 const FavoriteCard = ({ favorite, product, onRemove, onAddToBasket, onViewHistory }) => {
@@ -34,6 +33,9 @@ const EnhancedFavoriteCard = withObservables(['favorite'], ({ favorite }) => ({
 
 // Ecrã Central de Favoritos
 const FavoritesScreen = ({ favorites, shoppingLists }) => {
+  const theme = useTheme();
+  const colors = theme.colors;
+  const styles = createStyles(colors);
   // Estados para o Modal de Histórico de Preços
   const [selectedProductForHistory, setSelectedProductForHistory] = useState(null);
   const [isHistoryVisible, setIsHistoryVisible] = useState(false);
@@ -276,7 +278,7 @@ const FavoritesScreen = ({ favorites, shoppingLists }) => {
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,

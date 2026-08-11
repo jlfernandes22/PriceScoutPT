@@ -1,17 +1,19 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { View, StyleSheet, ScrollView, FlatList, Image, Pressable } from 'react-native';
+import { View, StyleSheet, ScrollView, FlatList, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Text, IconButton, Chip, FAB, Surface, Divider, ActivityIndicator, Portal, Dialog, Button } from 'react-native-paper';
+import { Text, IconButton, Chip, FAB, Surface, Divider, ActivityIndicator, Portal, Dialog, Button, TouchableRipple , useTheme } from 'react-native-paper';
 import { Q } from '@nozbe/watermelondb';
 import withObservables from '@nozbe/with-observables';
 import { database } from '../model';
 import ProductHistoryModal from '../components/ProductHistoryModal';
 import { getSupermarket, formatPrice } from '../components/ProductCard';
-import { colors } from '../theme';
 
 // Cabaz simples: lista de produtos, origem (supermercado) e total.
 // A comparação de preços vive no separador "Comparar".
 const BasketDetails = ({ shoppingList, items, favoriteIds, onToggleFavorite }) => {
+  const theme = useTheme();
+  const colors = theme.colors;
+  const styles = createStyles(colors);
   const [resolvedItems, setResolvedItems] = useState(null);
   const [selectedProductForHistory, setSelectedProductForHistory] = useState(null);
   const [isHistoryVisible, setIsHistoryVisible] = useState(false);
@@ -141,8 +143,8 @@ const BasketDetails = ({ shoppingList, items, favoriteIds, onToggleFavorite }) =
           const brandInfo = getSupermarket(r.product.supermarketId);
           const subtotal = (parseFloat(r.product.price) || 0) * r.quantity;
           return (
-            <Pressable
-              style={({ pressed }) => [styles.itemRow, pressed && styles.itemRowPressed]}
+            <TouchableRipple
+              style={styles.itemRow}
               onPress={() => {
                 setSelectedProductForHistory(r.product);
                 setIsHistoryVisible(true);
@@ -214,7 +216,7 @@ const BasketDetails = ({ shoppingList, items, favoriteIds, onToggleFavorite }) =
                 accessibilityLabel={`Remover ${r.product.name} do cabaz`}
                 hitSlop={8}
               />
-            </Pressable>
+            </TouchableRipple>
           );
         }}
         ItemSeparatorComponent={() => <Divider style={styles.rowDivider} />}
@@ -262,6 +264,9 @@ const enhance = withObservables(['shoppingList'], ({ shoppingList }) => ({
 const EnhancedBasketDetails = enhance(BasketDetails);
 
 const BasketScreen = ({ shoppingLists, favorites }) => {
+  const theme = useTheme();
+  const colors = theme.colors;
+  const styles = createStyles(colors);
   const [activeListId, setActiveListId] = useState('');
 
   const favoriteIds = useMemo(() => {
@@ -347,7 +352,7 @@ const BasketScreen = ({ shoppingLists, favorites }) => {
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
@@ -425,9 +430,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
     backgroundColor: colors.surface,
-  },
-  itemRowPressed: {
-    backgroundColor: colors.surfaceVariant,
   },
   itemThumb: {
     width: 44,

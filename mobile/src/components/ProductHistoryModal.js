@@ -1,14 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { View, StyleSheet, ScrollView, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Portal, Modal, Surface, Text, IconButton, Icon, Divider, Card, Badge, ActivityIndicator } from 'react-native-paper';
+import { Portal, Modal, Surface, Text, IconButton, Icon, Divider, Card, Badge, ActivityIndicator , useTheme } from 'react-native-paper';
 import { LineChart } from 'react-native-chart-kit';
 import axios from 'axios';
 import { useLocalFuzzyMatch } from '../utils/fuzzyMatch';
 import { computeUnitPrice } from '../utils/unitPrice';
 import { API_BASE_URL } from '../config';
 import { SUPERMARKET_BRANDS, getSupermarket, ProductImage } from './ProductCard';
-import { colors } from '../theme';
 
 const formatDate = (dateStr) => {
   const d = new Date(dateStr);
@@ -16,6 +15,9 @@ const formatDate = (dateStr) => {
 };
 
 const ProductHistoryModal = ({ product, visible, onDismiss, isFavorite, onToggleFavorite }) => {
+  const theme = useTheme();
+  const colors = theme.colors;
+  const styles = createStyles(colors);
   const [history, setHistory] = useState([]);
   const [fetching, setFetching] = useState(false);
   const [networkError, setNetworkError] = useState(false);
@@ -316,7 +318,7 @@ const ProductHistoryModal = ({ product, visible, onDismiss, isFavorite, onToggle
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors) => StyleSheet.create({
   modalContent: {
     backgroundColor: colors.background,
     flex: 1,

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, memo } from 'react';
 import { View, StyleSheet, FlatList, ScrollView, Keyboard } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Searchbar, Text, IconButton, Portal, Dialog, Button, TextInput, RadioButton, Surface, Chip, Icon, Snackbar } from 'react-native-paper';
+import { Searchbar, Text, IconButton, Portal, Dialog, Button, TextInput, RadioButton, Surface, Chip, Icon, Snackbar , useTheme } from 'react-native-paper';
 import { Q } from '@nozbe/watermelondb';
 import withObservables from '@nozbe/with-observables';
 import { database } from '../model';
@@ -9,7 +9,6 @@ import { syncDatabase } from '../services/sync';
 import ProductHistoryModal from '../components/ProductHistoryModal';
 import SettingsModal from '../components/SettingsModal';
 import ProductCard, { SUPERMARKET_BRANDS, getSupermarket } from '../components/ProductCard';
-import { colors } from '../theme';
 
 const ALL_SUPERMARKETS = 'all';
 
@@ -29,6 +28,10 @@ const ProductList = memo(function ProductList({
   onLoadMore,
 }) {
   const [showAllCategories, setShowAllCategories] = useState(false);
+
+  const theme = useTheme();
+  const colors = theme.colors;
+  const styles = createStyles(colors);
 
   const visibleCategories = useMemo(() => {
     // As categorias são canónicas (globais) — aplicam-se a todos os supermercados.
@@ -190,6 +193,9 @@ const enhanceList = withObservables(
 const EnhancedProductList = enhanceList(ProductList);
 
 const SearchScreen = ({ shoppingLists, favorites, categories }) => {
+  const theme = useTheme();
+  const colors = theme.colors;
+  const styles = createStyles(colors);
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [selectedSupermarket, setSelectedSupermarket] = useState(ALL_SUPERMARKETS);
@@ -515,7 +521,7 @@ const SearchScreen = ({ shoppingLists, favorites, categories }) => {
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
