@@ -49,3 +49,4 @@ test_robust_parser.py
 
 # ---- Local build secrets (never commit) ----
 mobile/app.config.local.json
+release.keystore.old-2026-08-09
