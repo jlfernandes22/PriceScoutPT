@@ -7,6 +7,7 @@ import Animated, {
   useSharedValue,
   useAnimatedStyle,
   useAnimatedProps,
+  useFrameCallback,
   withRepeat,
   withTiming,
   Easing as ReEasing,
@@ -25,14 +26,9 @@ const ShimmerClockContext = createContext(null);
 export const ShimmerClockProvider = ({ children }) => {
   const progress = useSharedValue(0);
 
-  useEffect(() => {
-    progress.value = withRepeat(
-      withTiming(1, { duration: loadingTokens.shimmer.durationMs, easing: ReEasing.linear }),
-      -1,
-      false
-    );
-    return () => cancelAnimation(progress);
-  }, [progress]);
+  useFrameCallback((frameInfo) => {
+    progress.value = (frameInfo.timeSinceFirstFrame / loadingTokens.shimmer.durationMs) % 1;
+  });
 
   return <ShimmerClockContext.Provider value={progress}>{children}</ShimmerClockContext.Provider>;
 };
@@ -122,14 +118,9 @@ export const WavyProgress = ({ height = loadingTokens.wavy.height, style }) => {
   const progress = useSharedValue(0);
   const colors = theme.colors;
 
-  useEffect(() => {
-    progress.value = withRepeat(
-      withTiming(1, { duration: loadingTokens.wavy.cycleMs, easing: ReEasing.inOut(ReEasing.sin) }),
-      -1,
-      false
-    );
-    return () => cancelAnimation(progress);
-  }, [progress]);
+  useFrameCallback((frameInfo) => {
+    progress.value = (frameInfo.timeSinceFirstFrame / loadingTokens.wavy.cycleMs) % 1;
+  });
 
   const animatedProps = useAnimatedProps(() => {
     const phase = progress.value * 2 * Math.PI;
@@ -452,39 +443,47 @@ export const M3LoadingIndicator = ({ size = loadingTokens.loadingIndicator.size,
   const progress = useSharedValue(0);
   const count = MORPH_SHAPES.length;
 
-  useEffect(() => {
-    progress.value = withRepeat(
-      withTiming(1, { duration: loadingTokens.loadingIndicator.cycleMs, easing: ReEasing.inOut(ReEasing.sin) }),
-      -1,
-      false
-    );
-    return () => cancelAnimation(progress);
-  }, [progress]);
+  useFrameCallback((frameInfo) => {
+    progress.value = (frameInfo.timeSinceFirstFrame / loadingTokens.loadingIndicator.cycleMs) % 1;
+  });
 
-  // Morph real: interpola os vértices entre a forma ativa e a seguinte
+  // Morph real: interpola os vértices entre a forma ativa e a seguinte.
+  // TUDO inline no worklet — sem chamadas a funções externas (as chamadas a
+  // funções module-level dentro de worklets falham neste stack: "Object is not
+  // a function"). MORPH_SHAPES entra como dado capturado (constante).
   const pathProps = useAnimatedProps(() => {
     const cycle = progress.value * count;
     const idx = Math.floor(cycle) % count;
     const frac = cycle - Math.floor(cycle);
     const a = MORPH_SHAPES[idx];
     const b = MORPH_SHAPES[(idx + 1) % count];
-    const pts = new Array(MORPH_SAMPLES);
-    for (let i = 0; i < MORPH_SAMPLES; i++) {
-      pts[i] = [a[i][0] + (b[i][0] - a[i][0]) * frac, a[i][1] + (b[i][1] - a[i][1]) * frac];
+    let d =
+      'M ' +
+      ((a[0][0] + (b[0][0] - a[0][0]) * frac) * 48).toFixed(2) +
+      ' ' +
+      ((a[0][1] + (b[0][1] - a[0][1]) * frac) * 48).toFixed(2);
+    for (let i = 1; i < MORPH_SAMPLES; i += 3) {
+      const i1 = i;
+      const i2 = (i + 1) % MORPH_SAMPLES;
+      const i3 = (i + 2) % MORPH_SAMPLES;
+      const x1 = (a[i1][0] + (b[i1][0] - a[i1][0]) * frac) * 48;
+      const y1 = (a[i1][1] + (b[i1][1] - a[i1][1]) * frac) * 48;
+      const x2 = (a[i2][0] + (b[i2][0] - a[i2][0]) * frac) * 48;
+      const y2 = (a[i2][1] + (b[i2][1] - a[i2][1]) * frac) * 48;
+      const x3 = (a[i3][0] + (b[i3][0] - a[i3][0]) * frac) * 48;
+      const y3 = (a[i3][1] + (b[i3][1] - a[i3][1]) * frac) * 48;
+      d +=
+        ' C ' + x1.toFixed(2) + ' ' + y1.toFixed(2) + ', ' + x2.toFixed(2) + ' ' +
+        y2.toFixed(2) + ', ' + x3.toFixed(2) + ' ' + y3.toFixed(2);
     }
-    return { d: buildMorphPath(pts) };
+    return { d: d + ' Z' };
   });
 
   // Rotação oficial: -progress × 180° (sentido anti-horário)
   const rotation = useSharedValue(0);
-  useEffect(() => {
-    rotation.value = withRepeat(
-      withTiming(1, { duration: loadingTokens.loadingIndicator.cycleMs, easing: ReEasing.linear }),
-      -1,
-      false
-    );
-    return () => cancelAnimation(rotation);
-  }, [rotation]);
+  useFrameCallback((frameInfo) => {
+    rotation.value = (frameInfo.timeSinceFirstFrame / loadingTokens.loadingIndicator.cycleMs) % 1;
+  });
 
   const containerStyle = useAnimatedStyle(() => ({
     transform: [{ rotate: `${-rotation.value * 180}deg` }],
