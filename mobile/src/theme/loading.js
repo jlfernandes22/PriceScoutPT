@@ -7,7 +7,6 @@ import Animated, {
   useSharedValue,
   useAnimatedStyle,
   useAnimatedProps,
-  useFrameCallback,
   withRepeat,
   withTiming,
   Easing as ReEasing,
@@ -26,10 +25,14 @@ const ShimmerClockContext = createContext(null);
 export const ShimmerClockProvider = ({ children }) => {
   const progress = useSharedValue(0);
 
-  useFrameCallback((frameInfo) => {
-    'worklet';
-    progress.value = (frameInfo.timeSinceFirstFrame / loadingTokens.shimmer.durationMs) % 1;
-  });
+  useEffect(() => {
+    progress.value = withRepeat(
+      withTiming(1, { duration: loadingTokens.shimmer.durationMs, easing: ReEasing.linear }),
+      -1,
+      false
+    );
+    return () => cancelAnimation(progress);
+  }, [progress]);
 
   return <ShimmerClockContext.Provider value={progress}>{children}</ShimmerClockContext.Provider>;
 };
@@ -119,10 +122,14 @@ export const WavyProgress = ({ height = loadingTokens.wavy.height, style }) => {
   const progress = useSharedValue(0);
   const colors = theme.colors;
 
-  useFrameCallback((frameInfo) => {
-    'worklet';
-    progress.value = (frameInfo.timeSinceFirstFrame / loadingTokens.wavy.cycleMs) % 1;
-  });
+  useEffect(() => {
+    progress.value = withRepeat(
+      withTiming(1, { duration: loadingTokens.wavy.cycleMs, easing: ReEasing.inOut(ReEasing.sin) }),
+      -1,
+      false
+    );
+    return () => cancelAnimation(progress);
+  }, [progress]);
 
   const animatedProps = useAnimatedProps(() => {
     const phase = progress.value * 2 * Math.PI;
@@ -428,7 +435,6 @@ for (let i = 1; i < BASE_SHAPES.length; i++) {
 
 // Constrói o path SVG fechado com curvas suaves a partir dos pontos interpolados
 const buildMorphPath = (pts) => {
-  'worklet';
   let d = `M ${(pts[0][0] * 48).toFixed(2)} ${(pts[0][1] * 48).toFixed(2)}`;
   for (let i = 1; i < pts.length; i += 3) {
     const p1 = pts[i];
@@ -446,17 +452,17 @@ export const M3LoadingIndicator = ({ size = loadingTokens.loadingIndicator.size,
   const progress = useSharedValue(0);
   const count = MORPH_SHAPES.length;
 
-  // Animação por frame callback (mais robusta que withRepeat neste stack):
-  // o progresso avança deterministicamente com o tempo do relógio da UI.
-  useFrameCallback((frameInfo) => {
-    'worklet';
-    const cycleMs = loadingTokens.loadingIndicator.cycleMs;
-    progress.value = (frameInfo.timeSinceFirstFrame / cycleMs) % 1;
-  });
+  useEffect(() => {
+    progress.value = withRepeat(
+      withTiming(1, { duration: loadingTokens.loadingIndicator.cycleMs, easing: ReEasing.inOut(ReEasing.sin) }),
+      -1,
+      false
+    );
+    return () => cancelAnimation(progress);
+  }, [progress]);
 
   // Morph real: interpola os vértices entre a forma ativa e a seguinte
   const pathProps = useAnimatedProps(() => {
-    'worklet';
     const cycle = progress.value * count;
     const idx = Math.floor(cycle) % count;
     const frac = cycle - Math.floor(cycle);
@@ -471,11 +477,14 @@ export const M3LoadingIndicator = ({ size = loadingTokens.loadingIndicator.size,
 
   // Rotação oficial: -progress × 180° (sentido anti-horário)
   const rotation = useSharedValue(0);
-  useFrameCallback((frameInfo) => {
-    'worklet';
-    const cycleMs = loadingTokens.loadingIndicator.cycleMs;
-    rotation.value = (frameInfo.timeSinceFirstFrame / cycleMs) % 1;
-  });
+  useEffect(() => {
+    rotation.value = withRepeat(
+      withTiming(1, { duration: loadingTokens.loadingIndicator.cycleMs, easing: ReEasing.linear }),
+      -1,
+      false
+    );
+    return () => cancelAnimation(rotation);
+  }, [rotation]);
 
   const containerStyle = useAnimatedStyle(() => ({
     transform: [{ rotate: `${-rotation.value * 180}deg` }],
