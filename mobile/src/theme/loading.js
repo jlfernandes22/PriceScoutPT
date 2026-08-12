@@ -466,21 +466,66 @@ const springResponse = (tSec) => {
   return 1 - e * (Math.cos(omegad * tSec) + ((zeta * omega) / omegad) * Math.sin(omegad * tSec));
 };
 
+// Converte '#RRGGBB' para o formato RGBA 0..1 usado pelo Lottie
+const hexToLottieColor = (hex) => {
+  const h = hex.replace('#', '');
+  const int = parseInt(h, 16);
+  return [
+    ((int >> 16) & 255) / 255,
+    ((int >> 8) & 255) / 255,
+    (int & 255) / 255,
+    1,
+  ];
+};
+
 export const M3LoadingIndicator = ({ size = loadingTokens.loadingIndicator.size, overContent = false, style }) => {
   const theme = useTheme();
   const reduceMotion = useReduceMotion();
   const activeColor = overContent ? theme.colors.onPrimaryContainer : theme.colors.primary;
 
+  // Cor aplicada diretamente no JSON (sem colorFilters — elimina a dependência
+  // do keypath nativo). Deep-copy mínimo com a cor do tema.
+  const source = useMemo(() => {
+    const copy = {
+      ...m3loadingJson,
+      layers: m3loadingJson.layers.map((layer) => ({
+        ...layer,
+        shapes: layer.shapes.map((gr) => ({
+          ...gr,
+          it: gr.it.map((item) =>
+            item.ty === 'fl'
+              ? { ...item, c: { a: 0, k: hexToLottieColor(activeColor) } }
+              : item
+          ),
+        })),
+      })),
+    };
+    return copy;
+  }, [activeColor]);
+
+  // Playback manual via `progress` (nativo, fiável) — evita os bugs de
+  // autoPlay/loop do lottie-react-native neste stack.
+  const [progress, setProgress] = useState(0);
+  const reduceMotionRef = useRef(reduceMotion);
+  useEffect(() => {
+    if (reduceMotionRef.current) return;
+    let raf = 0;
+    const startedAt = Date.now();
+    const tick = () => {
+      const elapsed = Date.now() - startedAt;
+      setProgress((elapsed % 4550) / 4550);
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
   return (
     <View style={[styles.indicatorContainer, { width: size, height: size }, style]} accessibilityRole="progressbar" accessibilityLabel="A carregar">
       <LottieView
-        source={m3loadingJson}
+        source={source}
         style={{ width: size, height: size }}
-        autoPlay={!reduceMotion}
-        loop
-        progress={reduceMotion ? 0 : undefined}
-        speed={1}
-        colorFilters={[{ keypath: 'fill', color: activeColor }]}
+        progress={progress}
       />
     </View>
   );
