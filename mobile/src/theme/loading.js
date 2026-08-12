@@ -481,7 +481,6 @@ export const M3LoadingIndicator = ({ size = loadingTokens.loadingIndicator.size,
         progress={reduceMotion ? 0 : undefined}
         speed={1}
         colorFilters={[{ keypath: 'fill', color: activeColor }]}
-        renderMode="HARDWARE"
       />
     </View>
   );
