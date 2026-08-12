@@ -194,15 +194,40 @@ const buildStar = (n, inner, rounding) => {
   return pts;
 };
 
-// customPolygon do AOSP: base + repetições rotacionadas (+ espelho opcional)
+// customPolygon/doRepeat do AOSP (MaterialShapes.kt): base + repetições
+// rotacionadas; com mirroring, as repetições ímpares são o espelho da base
+// através do eixo do primeiro vértice (fórmula angular exata do AOSP).
 const buildReps = (base, reps, mirror = false) => {
   const pts = [];
-  const step = TAU / reps;
-  for (let i = 0; i < reps; i++) {
-    const base2 = mirror ? base.concat(base.map((p) => ({ x: -p.x + 1, y: p.y, r: p.r || 0 }))) : base;
-    for (const p of base2) {
-      const [x, y] = rot2(p.x - 0.5, p.y - 0.5, step * i);
-      pts.push({ x: x + 0.5, y: y + 0.5, r: p.r || 0 });
+  const angleOf = (p) => Math.atan2(p.y - 0.5, p.x - 0.5);
+  const distOf = (p) => Math.hypot(p.x - 0.5, p.y - 0.5);
+  if (mirror) {
+    const angles = base.map(angleOf);
+    const distances = base.map(distOf);
+    const actualReps = reps * 2;
+    const sectionAngle = TAU / actualReps;
+    for (let r = 0; r < actualReps; r++) {
+      for (let idx = 0; idx < base.length; idx++) {
+        const i = r % 2 === 0 ? idx : base.length - 1 - idx;
+        if (i > 0 || r % 2 === 0) {
+          const a =
+            sectionAngle * r +
+            (r % 2 === 0 ? angles[i] : sectionAngle - angles[i] + 2 * angles[0]);
+          pts.push({
+            x: 0.5 + Math.cos(a) * distances[i],
+            y: 0.5 + Math.sin(a) * distances[i],
+            r: base[i].r || 0,
+          });
+        }
+      }
+    }
+  } else {
+    const step = TAU / reps;
+    for (let r = 0; r < reps; r++) {
+      for (const p of base) {
+        const [x, y] = rot2(p.x - 0.5, p.y - 0.5, step * r);
+        pts.push({ x: x + 0.5, y: y + 0.5, r: p.r || 0 });
+      }
     }
   }
   return pts;
@@ -343,7 +368,34 @@ const normalizeShape = (pts) => {
 };
 
 // Polígonos finais (pontos comuns) — pré-computados no arranque.
-const MORPH_SHAPES = RAW_SHAPES.map((s) => normalizeShape(resample(withRoundedCorners(s), MORPH_SAMPLES)));
+const BASE_SHAPES = RAW_SHAPES.map((s) => normalizeShape(resample(withRoundedCorners(s), MORPH_SAMPLES)));
+
+// Alinhamento cíclico (o mesmo que o Morph do AOSP faz): roda a sequência de
+// vértices de cada forma para minimizar a distância ponto-a-ponto à anterior —
+// sem isto, os vértices de índices iguais apontam para ângulos diferentes e o
+// morph colapsa "para o meio" na transição.
+const alignTo = (target, source) => {
+  let bestShift = 0;
+  let bestCost = Infinity;
+  for (let s = 0; s < MORPH_SAMPLES; s++) {
+    let cost = 0;
+    for (let i = 0; i < MORPH_SAMPLES; i++) {
+      const a = target[i];
+      const b = source[(i + s) % MORPH_SAMPLES];
+      cost += (a[0] - b[0]) * (a[0] - b[0]) + (a[1] - b[1]) * (a[1] - b[1]);
+    }
+    if (cost < bestCost) {
+      bestCost = cost;
+      bestShift = s;
+    }
+  }
+  return [...source.slice(bestShift), ...source.slice(0, bestShift)];
+};
+
+const MORPH_SHAPES = [BASE_SHAPES[0]];
+for (let i = 1; i < BASE_SHAPES.length; i++) {
+  MORPH_SHAPES.push(alignTo(MORPH_SHAPES[i - 1], BASE_SHAPES[i]));
+}
 
 // Constrói o path SVG fechado com curvas suaves a partir dos pontos interpolados
 const buildMorphPath = (pts) => {
