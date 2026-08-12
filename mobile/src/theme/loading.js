@@ -439,18 +439,29 @@ const buildMorphPath = (pts) => {
 };
 
 
-// Path do morph para uma fase 0..1 (cálculo na thread JS — re-render garantido)
-const morphPathForPhase = (phase) => {
-  const cycle = phase * MORPH_SHAPES.length;
-  const idx = Math.floor(cycle) % MORPH_SHAPES.length;
-  const frac = cycle - Math.floor(cycle);
-  const a = MORPH_SHAPES[idx];
-  const b = MORPH_SHAPES[(idx + 1) % MORPH_SHAPES.length];
+// Path do morph entre duas formas com uma fração 0..1 (com overshoot permitido)
+const morphPathForPair = (a, b, frac) => {
   const pts = new Array(MORPH_SAMPLES);
   for (let i = 0; i < MORPH_SAMPLES; i++) {
     pts[i] = [a[i][0] + (b[i][0] - a[i][0]) * frac, a[i][1] + (b[i][1] - a[i][1]) * frac];
   }
   return buildMorphPath(pts);
+};
+
+// Cadência oficial (LoadingIndicator.kt): cada transição é um spring amortecido
+// (dampingRatio 0.6, stiffness 200) que assenta em ~350ms, seguido de pausa até
+// aos 650ms (MorphIntervalMillis). Rotação linear contínua: 360° / 4666ms.
+const MORPH_INTERVAL_MS = 650;
+const SPRING_DURATION_MS = 350;
+const ROTATION_CYCLE_MS = 4666;
+
+// Resposta de um spring amortecido de 0 a 1 (overshoot ≈ 8% — o "saltinho")
+const springResponse = (tSec) => {
+  const omega = Math.sqrt(200);
+  const zeta = 0.6;
+  const omegad = omega * Math.sqrt(1 - zeta * zeta);
+  const e = Math.exp(-zeta * omega * tSec);
+  return 1 - e * (Math.cos(omegad * tSec) + ((zeta * omega) / omegad) * Math.sin(omegad * tSec));
 };
 
 export const M3LoadingIndicator = ({ size = loadingTokens.loadingIndicator.size, overContent = false, style }) => {
@@ -463,7 +474,7 @@ export const M3LoadingIndicator = ({ size = loadingTokens.loadingIndicator.size,
   // Animação por estado React + requestAnimationFrame (thread JS).
   // Garante o re-render em qualquer dispositivo — os animated props do SVG
   // (worklet/UI-thread) não atualizam o `d` do path neste stack.
-  const [phase, setPhase] = useState(0);
+  const [morph, setMorph] = useState({ idx: 0, frac: 0, rot: 0 });
 
   const reduceMotionRef = useRef(reduceMotion);
   useEffect(() => {
@@ -472,15 +483,22 @@ export const M3LoadingIndicator = ({ size = loadingTokens.loadingIndicator.size,
     const startedAt = Date.now();
     const tick = () => {
       const elapsed = Date.now() - startedAt;
-      setPhase((elapsed % loadingTokens.loadingIndicator.cycleMs) / loadingTokens.loadingIndicator.cycleMs);
+      const idx = Math.floor(elapsed / MORPH_INTERVAL_MS) % MORPH_SHAPES.length;
+      const tIn = elapsed % MORPH_INTERVAL_MS;
+      const tt = Math.min(1, tIn / SPRING_DURATION_MS);
+      const frac = springResponse(tt * (SPRING_DURATION_MS / 1000));
+      const rot = -((elapsed % ROTATION_CYCLE_MS) / ROTATION_CYCLE_MS) * 360;
+      setMorph({ idx, frac, rot });
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
   }, []);
 
-  const d = useMemo(() => morphPathForPhase(phase), [phase]);
-  const rotationDeg = -phase * 180;
+  const a = MORPH_SHAPES[morph.idx];
+  const b = MORPH_SHAPES[(morph.idx + 1) % MORPH_SHAPES.length];
+  const d = useMemo(() => morphPathForPair(a, b, morph.frac), [morph.idx, morph.frac]);
+  const rotationDeg = morph.rot;
 
   return (
     <View style={[styles.indicatorContainer, { width: size, height: size }, style]} accessibilityRole="progressbar" accessibilityLabel="A carregar">
