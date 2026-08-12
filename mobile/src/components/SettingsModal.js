@@ -133,8 +133,6 @@ const SettingsModal = ({ visible, onDismiss }) => {
             <Button
               mode="contained"
               icon="cloud-download-outline"
-              buttonColor={colors.primary}
-              textColor={colors.surface}
               style={styles.actionButton}
               contentStyle={styles.buttonContent}
               loading={syncingNow}
@@ -177,8 +175,8 @@ const SettingsModal = ({ visible, onDismiss }) => {
             <Button
               mode="contained"
               icon="database-sync"
-              buttonColor={colors.danger}
-              textColor={colors.surface}
+              buttonColor={colors.error}
+              textColor={colors.onError}
               style={styles.actionButton}
               contentStyle={styles.buttonContent}
               onPress={handleResetDatabase}

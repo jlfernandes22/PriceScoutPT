@@ -128,10 +128,8 @@ const OnboardingScreen = ({ onComplete }) => {
             >
               Saltar
             </Button>
-            <Button 
-              mode="contained" 
-              buttonColor={activeSlide.color} 
-              textColor={colors.surface}
+            <Button
+              mode="contained"
               onPress={handleNext}
               style={styles.actionButton}
             >
@@ -139,10 +137,8 @@ const OnboardingScreen = ({ onComplete }) => {
             </Button>
           </>
         ) : (
-          <Button 
-            mode="contained" 
-            buttonColor={activeSlide.color} 
-            textColor={colors.surface} 
+          <Button
+            mode="contained"
             onPress={handleComplete}
             style={styles.fullActionButton}
             icon="rocket-launch"

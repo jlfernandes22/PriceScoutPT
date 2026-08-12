@@ -226,7 +226,7 @@ const ProductHistoryScreen = ({ route, navigation }) => {
             </View>
             <View style={styles.unitColRight}>
               <Text variant="bodySmall" style={styles.unitLabel}>{unitLabel}</Text>
-              <Text variant="titleSmall" style={[styles.unitValue, { color: brandInfo.color }]}>
+              <Text variant="titleSmall" style={styles.unitValue}>
                 {unitInfo ? `${unitInfo.per.toFixed(2).replace('.', ',')} ${unitInfo.label}` : '—'}
               </Text>
             </View>
@@ -244,7 +244,7 @@ const ProductHistoryScreen = ({ route, navigation }) => {
           </Surface>
           <Surface style={[styles.statCard, { borderBottomColor: brandInfo.color }]} elevation={1}>
             <Text variant="bodySmall" style={styles.statLabel}>Preço Atual</Text>
-            <Text variant="titleLarge" style={[styles.statValue, { color: brandInfo.color }]}>
+            <Text variant="titleLarge" style={styles.statValue}>
               {stats.current.toFixed(2)} €
             </Text>
           </Surface>
@@ -317,7 +317,7 @@ const ProductHistoryScreen = ({ route, navigation }) => {
                   <View style={styles.crossRow}>
                     <View style={styles.crossLeft}>
                       <Badge
-                        style={[styles.miniBadge, { backgroundColor: brandData.color }]}
+                        style={[styles.miniBadge, { backgroundColor: brandData.color, color: colors.onBrand }]}
                         accessible={false}
                         importantForAccessibility="no-hide-descendants"
                       >
@@ -334,10 +334,7 @@ const ProductHistoryScreen = ({ route, navigation }) => {
                     </View>
                     <Text
                       variant="titleMedium"
-                      style={[
-                        styles.crossPrice,
-                        match && match.available ? { color: brandData.color } : { color: colors.danger },
-                      ]}
+                      style={styles.crossPrice}
                     >
                       {match && match.available ? `${match.price.toFixed(2)} €` : 'N/A'}
                     </Text>
@@ -498,7 +495,6 @@ const createStyles = (colors) => StyleSheet.create({
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    color: colors.surface,
     fontSize: 13,
     fontWeight: 'bold',
   },

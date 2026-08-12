@@ -162,7 +162,7 @@ const BasketDetails = ({ shoppingList, items, favoriteIds, onToggleFavorite }) =
                 </Text>
                 <View style={styles.itemBadgeRow}>
                   <View style={[styles.badgeDot, { backgroundColor: brandInfo.color }]} />
-                  <Text variant="labelMedium" numberOfLines={1} style={[styles.itemSupermarket, { color: brandInfo.color }]}>
+                  <Text variant="labelMedium" numberOfLines={1} style={styles.itemSupermarket}>
                     {brandInfo.name}
                   </Text>
                   {r.product.brand ? (
@@ -223,7 +223,7 @@ const BasketDetails = ({ shoppingList, items, favoriteIds, onToggleFavorite }) =
       <FAB
         icon="cart-remove"
         style={styles.fab}
-        color={colors.surface}
+        color={colors.onError}
         onPress={() => setClearDialogVisible(true)}
         label="Limpar Cabaz"
       />

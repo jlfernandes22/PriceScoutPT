@@ -23,6 +23,8 @@ export const createPaperTheme = (isDark) => {
       textMuted: colors.outline,
       border: colors.outlineVariant,
       borderStrong: colors.outline,
+      // Texto sobre superfícies de marca (cores fixas escuras em ambos os temas)
+      onBrand: '#FFFFFF',
       // Paper v5 espera estes papéis extra (mantidos com os valores da seed)
       surfaceDisabled: colors.onSurface,
       onSurfaceDisabled: colors.outline,

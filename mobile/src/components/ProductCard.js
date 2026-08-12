@@ -107,10 +107,10 @@ const ProductCard = ({
           <View style={styles.bottomRow}>
             <View style={styles.badgeRow}>
               <View style={[styles.badge, { backgroundColor: brandInfo.color }]}>
-                <Text style={styles.badgeText}>{brandInfo.name}</Text>
+                <Text style={[styles.badgeText, { color: colors.onBrand }]}>{brandInfo.name}</Text>
               </View>
             </View>
-            <Text variant="titleMedium" style={[styles.price, { color: brandInfo.color }]}>
+            <Text variant="titleMedium" style={styles.price}>
               {formatPrice(product.price)}
             </Text>
           </View>
@@ -207,7 +207,6 @@ const createStyles = (colors) => StyleSheet.create({
     paddingVertical: 2,
   },
   badgeText: {
-    color: colors.surface,
     fontSize: 12,
     fontWeight: 'bold',
   },

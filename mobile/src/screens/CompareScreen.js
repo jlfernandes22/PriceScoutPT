@@ -342,7 +342,7 @@ const ComparisonDetails = ({ shoppingList, items, favoriteIds, onToggleFavorite 
               >
                 <Card.Content style={styles.summaryCardContent}>
                   <View style={styles.summaryHeaderRow}>
-                    <Text variant="titleMedium" style={[styles.supermarketLabel, { color: t.color }]}>
+                    <Text variant="titleMedium" style={styles.supermarketLabel}>
                       {t.name}
                     </Text>
                     {isCheapest && <IconButton icon="trophy" size={20} iconColor={colors.gold} style={styles.trophyIcon} />}
@@ -356,7 +356,7 @@ const ComparisonDetails = ({ shoppingList, items, favoriteIds, onToggleFavorite 
                       {t.unavailableCount} item(ns) indisponível
                     </Badge>
                   ) : (
-                    <Badge style={[styles.unavailableBadge, { backgroundColor: colors.successContainer, color: colors.textSecondary }]}>
+                    <Badge style={[styles.unavailableBadge, { backgroundColor: colors.successContainer, color: colors.onSuccessContainer }]}>
                       Carrinho Completo
                     </Badge>
                   )}
@@ -375,9 +375,9 @@ const ComparisonDetails = ({ shoppingList, items, favoriteIds, onToggleFavorite 
       <SectionList
         sections={sections}
         keyExtractor={(item) => item.key}
-        renderSectionHeader={({ section: { title, color, total, unavailableCount } }) => (
+        renderSectionHeader={({ section: { title, total, unavailableCount } }) => (
           <Surface style={[styles.sectionHeader, { borderLeftColor: color }]} elevation={1}>
-            <Text variant="titleMedium" style={[styles.sectionHeaderTitle, { color }]} accessibilityRole="header">{title}</Text>
+            <Text variant="titleMedium" style={styles.sectionHeaderTitle} accessibilityRole="header">{title}</Text>
             <View style={styles.sectionHeaderRight}>
               <Text variant="titleMedium" style={styles.sectionHeaderTotal}>
                 Total: {total > 0 ? `${total.toFixed(2)} €` : '—'}
@@ -674,7 +674,7 @@ const createStyles = (colors) => StyleSheet.create({
   },
   unavailableBadge: {
     backgroundColor: colors.dangerContainer,
-    color: colors.warning,
+    color: colors.onErrorContainer,
     fontSize: 12,
     alignSelf: 'flex-start',
     borderRadius: 4,
@@ -707,8 +707,8 @@ const createStyles = (colors) => StyleSheet.create({
     marginRight: 8,
   },
   sectionBadge: {
-    backgroundColor: colors.danger,
-    color: colors.surface,
+    backgroundColor: colors.error,
+    color: colors.onError,
   },
   listContent: {
     paddingBottom: 88,

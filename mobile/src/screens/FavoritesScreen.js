@@ -184,7 +184,7 @@ const FavoritesScreen = ({ favorites, shoppingLists }) => {
             {selectedProductForBasket && (
               <View style={styles.dialogProductInfo}>
                 <Text variant="titleMedium" style={styles.dialogProductName}>{selectedProductForBasket.name}</Text>
-                <Text variant="bodyMedium" style={{ color: getSupermarket(selectedProductForBasket.supermarketId).color, fontWeight: 'bold' }}>
+                <Text variant="bodyMedium" style={{ fontWeight: 'bold' }}>
                   Preço: {parseFloat(selectedProductForBasket.price).toFixed(2)} € em {getSupermarket(selectedProductForBasket.supermarketId).name}
                 </Text>
               </View>
@@ -257,7 +257,7 @@ const FavoritesScreen = ({ favorites, shoppingLists }) => {
           </Dialog.Content>
           <Dialog.Actions style={styles.dialogActions}>
             <Button textColor={colors.textMuted} onPress={() => setIsDialogVisible(false)}>Cancelar</Button>
-            <Button mode="contained" buttonColor={colors.primary} textColor={colors.surface} onPress={handleSaveToBasket}>
+            <Button mode="contained" onPress={handleSaveToBasket}>
               Confirmar
             </Button>
           </Dialog.Actions>

@@ -449,7 +449,7 @@ const SearchScreen = ({ shoppingLists, favorites, categories }) => {
             {selectedProduct && (
               <View style={styles.dialogProductInfo}>
                 <Text variant="titleMedium" style={styles.dialogProductName}>{selectedProduct.name}</Text>
-                <Text variant="bodyMedium" style={{ color: getSupermarket(selectedProduct.supermarketId).color, fontWeight: 'bold' }}>
+                <Text variant="bodyMedium" style={{ fontWeight: 'bold' }}>
                   Preço: {parseFloat(selectedProduct.price).toFixed(2)} € em {getSupermarket(selectedProduct.supermarketId).name}
                 </Text>
               </View>
@@ -519,7 +519,7 @@ const SearchScreen = ({ shoppingLists, favorites, categories }) => {
           </Dialog.Content>
           <Dialog.Actions style={styles.dialogActions}>
             <Button textColor={colors.textMuted} onPress={() => setIsDialogVisible(false)}>Cancelar</Button>
-            <Button mode="contained" buttonColor={colors.primary} textColor={colors.surface} onPress={handleSaveToBasket}>
+            <Button mode="contained" onPress={handleSaveToBasket}>
               Confirmar
             </Button>
           </Dialog.Actions>
