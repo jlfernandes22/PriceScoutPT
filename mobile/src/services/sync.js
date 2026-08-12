@@ -1,4 +1,5 @@
 import axios from 'axios';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   getLastPulledAt,
   setLastPulledAt,
@@ -7,6 +8,7 @@ import {
 import { API_BASE_URL } from '../config';
 
 const BATCH_SIZE = 5000;
+const FINGERPRINT_KEY = '@catalog_fingerprint';
 
 /**
  * Sincronização incremental com aplicação lote-a-lote.
@@ -20,9 +22,29 @@ const BATCH_SIZE = 5000;
  * O resultado é idempotente: se a sincronização for interrompida a meio, o cursor
  * local não avança e a próxima execução volta a descarregar (e o WatermelonDB converte
  * "criar já existente" em update — ver applyRemote.js).
+ *
+ * Fast-path por fingerprint (hash dos VALORES do catálogo): se o hash atual do
+ * servidor for igual ao guardado na última sincronização com sucesso, nada mudou —
+ * a sincronização salta por completo (0 downloads, 0 escrita).
  */
 export async function syncDatabase(database, options = {}) {
   const { onProgress } = options;
+
+  // 0. Verificação rápida: fingerprint do catálogo no servidor vs local.
+  let fingerprint = null;
+  try {
+    const fr = await axios.get(`${API_BASE_URL}/api/sync/fingerprint`, { timeout: 15000 });
+    fingerprint = fr.data && fr.data.fingerprint ? fr.data.fingerprint : null;
+    const stored = await AsyncStorage.getItem(FINGERPRINT_KEY);
+    if (fingerprint && stored && stored === fingerprint) {
+      console.log('[Sync] Catálogo sem alterações reais (fingerprint igual) — sincronização saltada.');
+      return;
+    }
+  } catch (e) {
+    // Servidor antigo ou sem rede: prossegue com o delta (comportamento atual).
+    console.warn('[Sync] Fingerprint indisponível — prossegue com delta.', e.message);
+  }
+
   console.log('[Sync] A iniciar protocolo de sincronização Offline-First (lote a lote)...');
 
   const lastPulledAt = (await getLastPulledAt(database)) || 0;
@@ -110,6 +132,9 @@ export async function syncDatabase(database, options = {}) {
 
   // Gravar o timestamp de última sincronização apenas no fim, com sucesso.
   await setLastPulledAt(database, finalTimestamp);
+  if (fingerprint) {
+    await AsyncStorage.setItem(FINGERPRINT_KEY, fingerprint);
+  }
 
   if (onProgress) {
     onProgress({ done: totalCreated + totalUpdated, total: totalCreated + totalUpdated, batch: batchCount });

@@ -5,6 +5,49 @@ const db = require('./db');
 const DEFAULT_LIMIT = 5000;
 const MAX_LIMIT = 10000;
 
+// ------------------------------------------------------------
+// Fingerprint do catálogo (verificação rápida de "houve mudanças reais?").
+// Hash sobre os VALORES (não timestamps): um re-scrape que apenas re-carrimba
+// updated_at mantém o hash — o cliente salta a sincronização (0 downloads).
+// Cacheado por scrape (MAX(last_scraped_at)) para não recalcular por pedido.
+// ------------------------------------------------------------
+let fingerprintCache = { value: null, at: null };
+
+router.get('/fingerprint', async (req, res) => {
+  try {
+    const scrapeRow = (
+      await db.query('SELECT MAX(last_scraped_at) AS v FROM products')
+    ).rows[0];
+    const scrapeAt = scrapeRow && scrapeRow.v ? new Date(scrapeRow.v).getTime() : 0;
+
+    if (fingerprintCache.at === scrapeAt && fingerprintCache.value) {
+      return res.json({ fingerprint: fingerprintCache.value, last_scraped_at: scrapeRow ? scrapeRow.v : null });
+    }
+
+    const r = await db.query(
+      `SELECT MD5(
+         string_agg(
+           id || '|' || COALESCE(price::text, '') || '|' || COALESCE(in_stock::text, '') ||
+           '|' || COALESCE(deleted::text, '') || '|' || COALESCE(name, '') || '|' ||
+           COALESCE(brand, '') || '|' || COALESCE(unit, '') || '|' ||
+           COALESCE(supermarket_id::text, '') || '|' || COALESCE(category_id::text, ''),
+           '~' ORDER BY id
+         ) || '|cat:' || COALESCE(
+           (SELECT string_agg(id || ':' || name || ':' || COALESCE(sort_order::text, ''), '~' ORDER BY id)
+            FROM canonical_categories),
+           ''
+         )
+       ) AS fp
+       FROM products`)
+    const fingerprint = r.rows[0].fp;
+    fingerprintCache = { value: fingerprint, at: scrapeAt };
+    res.json({ fingerprint, last_scraped_at: scrapeRow ? scrapeRow.v : null });
+  } catch (error) {
+    console.error('Fingerprint error:', error);
+    res.status(500).json({ error: 'Unable to compute fingerprint.' });
+  }
+});
+
 // Formatar rows do PostgreSQL para tipos compatíveis com o WatermelonDB
 const formatProducts = (rows) => rows.map(row => ({
   ...row,
