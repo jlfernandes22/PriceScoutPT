@@ -7,6 +7,7 @@ import Animated, {
   useSharedValue,
   useAnimatedStyle,
   useAnimatedProps,
+  useFrameCallback,
   withRepeat,
   withTiming,
   Easing as ReEasing,
@@ -25,14 +26,10 @@ const ShimmerClockContext = createContext(null);
 export const ShimmerClockProvider = ({ children }) => {
   const progress = useSharedValue(0);
 
-  useEffect(() => {
-    progress.value = withRepeat(
-      withTiming(1, { duration: loadingTokens.shimmer.durationMs, easing: ReEasing.linear }),
-      -1,
-      false
-    );
-    return () => cancelAnimation(progress);
-  }, [progress]);
+  useFrameCallback((frameInfo) => {
+    'worklet';
+    progress.value = (frameInfo.timeSinceFirstFrame / loadingTokens.shimmer.durationMs) % 1;
+  });
 
   return <ShimmerClockContext.Provider value={progress}>{children}</ShimmerClockContext.Provider>;
 };
@@ -122,14 +119,10 @@ export const WavyProgress = ({ height = loadingTokens.wavy.height, style }) => {
   const progress = useSharedValue(0);
   const colors = theme.colors;
 
-  useEffect(() => {
-    progress.value = withRepeat(
-      withTiming(1, { duration: loadingTokens.wavy.cycleMs, easing: ReEasing.inOut(ReEasing.sin) }),
-      -1,
-      false
-    );
-    return () => cancelAnimation(progress);
-  }, [progress]);
+  useFrameCallback((frameInfo) => {
+    'worklet';
+    progress.value = (frameInfo.timeSinceFirstFrame / loadingTokens.wavy.cycleMs) % 1;
+  });
 
   const animatedProps = useAnimatedProps(() => {
     const phase = progress.value * 2 * Math.PI;
@@ -453,39 +446,41 @@ export const M3LoadingIndicator = ({ size = loadingTokens.loadingIndicator.size,
   const progress = useSharedValue(0);
   const count = MORPH_SHAPES.length;
 
-  useEffect(() => {
-    progress.value = withRepeat(
-      withTiming(1, { duration: loadingTokens.loadingIndicator.cycleMs, easing: ReEasing.inOut(ReEasing.sin) }),
-      -1,
-      false
-    );
-    return () => cancelAnimation(progress);
-  }, [progress]);
+  // Animação por frame callback (mais robusta que withRepeat neste stack):
+  // o progresso avança deterministicamente com o tempo do relógio da UI.
+  useFrameCallback((frameInfo) => {
+    'worklet';
+    const cycleMs = loadingTokens.loadingIndicator.cycleMs;
+    progress.value = (frameInfo.timeSinceFirstFrame / cycleMs) % 1;
+  });
 
   // Morph real: interpola os vértices entre a forma ativa e a seguinte
   const pathProps = useAnimatedProps(() => {
-    const cycle = progress.value * count;
-    const idx = Math.floor(cycle) % count;
-    const frac = cycle - Math.floor(cycle);
-    const a = MORPH_SHAPES[idx];
-    const b = MORPH_SHAPES[(idx + 1) % count];
-    const pts = new Array(MORPH_SAMPLES);
-    for (let i = 0; i < MORPH_SAMPLES; i++) {
-      pts[i] = [a[i][0] + (b[i][0] - a[i][0]) * frac, a[i][1] + (b[i][1] - a[i][1]) * frac];
+    'worklet';
+    try {
+      const cycle = progress.value * count;
+      const idx = Math.floor(cycle) % count;
+      const frac = cycle - Math.floor(cycle);
+      const a = MORPH_SHAPES[idx];
+      const b = MORPH_SHAPES[(idx + 1) % count];
+      const pts = new Array(MORPH_SAMPLES);
+      for (let i = 0; i < MORPH_SAMPLES; i++) {
+        pts[i] = [a[i][0] + (b[i][0] - a[i][0]) * frac, a[i][1] + (b[i][1] - a[i][1]) * frac];
+      }
+      return { d: buildMorphPath(pts) };
+    } catch (e) {
+      console.log('[morph-worklet-err]', e && e.message ? e.message : String(e));
+      return { d: 'M24 8 L40 24 L24 40 L8 24 Z' };
     }
-    return { d: buildMorphPath(pts) };
   });
 
   // Rotação oficial: -progress × 180° (sentido anti-horário)
   const rotation = useSharedValue(0);
-  useEffect(() => {
-    rotation.value = withRepeat(
-      withTiming(1, { duration: loadingTokens.loadingIndicator.cycleMs, easing: ReEasing.linear }),
-      -1,
-      false
-    );
-    return () => cancelAnimation(rotation);
-  }, [rotation]);
+  useFrameCallback((frameInfo) => {
+    'worklet';
+    const cycleMs = loadingTokens.loadingIndicator.cycleMs;
+    rotation.value = (frameInfo.timeSinceFirstFrame / cycleMs) % 1;
+  });
 
   const containerStyle = useAnimatedStyle(() => ({
     transform: [{ rotate: `${-rotation.value * 180}deg` }],

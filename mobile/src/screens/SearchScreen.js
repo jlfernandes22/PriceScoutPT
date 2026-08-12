@@ -171,7 +171,7 @@ const ProductList = memo(function ProductList({
 });
 
 const PAGE_SIZE = 60;
-const MIN_SYNC_LOADING_MS = 1500;
+const MIN_SYNC_LOADING_MS = 8000;
 const MAX_LIST_RESULTS = 60000;
 
 const enhanceList = withObservables(
@@ -222,6 +222,12 @@ const SearchScreen = ({ shoppingLists, favorites, categories }) => {
 
   const [isSettingsVisible, setIsSettingsVisible] = useState(false);
   const navigation = useNavigation();
+  // [DEBUG] auto-sync temporário para verificação — REMOVER
+  useEffect(() => {
+    const t = setTimeout(() => handleSyncRef.current('button'), 3000);
+    return () => clearTimeout(t);
+  }, []);
+  const handleSyncRef = React.useRef(null);
 
   const [visibleLimit, setVisibleLimit] = useState(PAGE_SIZE);
 
@@ -273,6 +279,7 @@ const SearchScreen = ({ shoppingLists, favorites, categories }) => {
       }, remaining);
     }
   }, [isSyncing, setSyncState]);
+  handleSyncRef.current = handleSync;
 
   const openAddToBasketDialog = useCallback((product) => {
     setSelectedProduct(product);
@@ -405,7 +412,7 @@ const SearchScreen = ({ shoppingLists, favorites, categories }) => {
         accessibilityHint="Escreve o nome de um produto para filtrar a lista"
       />
 
-      {isSyncing ? (
+      {true ? ( // [DEBUG] forçar loading
         <View style={styles.syncLoadingContainer} accessibilityRole="progressbar" accessibilityLabel="A atualizar o catálogo">
           <M3LoadingOverlay size={64} label="A atualizar o catálogo" />
           <Text variant="bodyLarge" style={styles.syncLoadingText}>
