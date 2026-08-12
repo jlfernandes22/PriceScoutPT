@@ -37,14 +37,6 @@ function AppContent() {
   const [hasOnboarded, setHasOnboarded] = useState(false);
   const [syncProgress, setSyncProgress] = useState(null);
 
-  const [index, setIndex] = useState(0);
-  const [routes] = useState([
-    { key: 'search', title: 'Pesquisar', focusedIcon: 'magnify', unfocusedIcon: 'magnify' },
-    { key: 'favorites', title: 'Favoritos', focusedIcon: 'heart', unfocusedIcon: 'heart-outline' },
-    { key: 'compare', title: 'Comparar', focusedIcon: 'scale-balance', unfocusedIcon: 'scale-balance' },
-    { key: 'basket', title: 'Meu Cabaz', focusedIcon: 'cart', unfocusedIcon: 'cart-outline' },
-  ]);
-
   const runSync = async (background = false) => {
     if (!background) {
       setIsLoading(true);
@@ -87,22 +79,6 @@ function AppContent() {
 
     initializeApp();
   }, []);
-
-  // Usamos um switch manual para evitar falhas do SceneMap
-  const renderScene = ({ route, jumpTo }) => {
-    switch (route.key) {
-      case 'search':
-        return SearchScreen ? <SearchScreen jumpTo={jumpTo} /> : <View />;
-      case 'favorites':
-        return FavoritesScreen ? <FavoritesScreen jumpTo={jumpTo} /> : <View />;
-      case 'compare':
-        return CompareScreen ? <CompareScreen jumpTo={jumpTo} /> : <View />;
-      case 'basket':
-        return BasketScreen ? <BasketScreen jumpTo={jumpTo} /> : <View />;
-      default:
-        return null;
-    }
-  };
 
   if (isLoading) {
     return (
@@ -167,17 +143,6 @@ function AppContent() {
     },
   };
 
-  const MainTabs = () => (
-    <BottomNavigation
-      navigationState={{ index, routes }}
-      onIndexChange={setIndex}
-      renderScene={renderScene}
-      shifting={true}
-      labeled={true}
-      barStyle={styles.tabBar}
-    />
-  );
-
   return (
     <SafeAreaProvider>
       <PaperProvider theme={theme}>
@@ -194,6 +159,49 @@ function AppContent() {
         </NavigationContainer>
       </PaperProvider>
     </SafeAreaProvider>
+  );
+}
+
+// Usamos um switch manual para evitar falhas do SceneMap
+const renderScene = ({ route, jumpTo }) => {
+  switch (route.key) {
+    case 'search':
+      return SearchScreen ? <SearchScreen jumpTo={jumpTo} /> : <View />;
+    case 'favorites':
+      return FavoritesScreen ? <FavoritesScreen jumpTo={jumpTo} /> : <View />;
+    case 'compare':
+      return CompareScreen ? <CompareScreen jumpTo={jumpTo} /> : <View />;
+    case 'basket':
+      return BasketScreen ? <BasketScreen jumpTo={jumpTo} /> : <View />;
+    default:
+      return null;
+  }
+};
+
+// Componente de tabs estável (módulo-level) — AppContent re-renders não o
+// remontam, evitando fechar modais/estado dos ecrãs.
+function MainTabs() {
+  const [index, setIndex] = useState(0);
+  const [routes] = useState([
+    { key: 'search', title: 'Pesquisar', focusedIcon: 'magnify', unfocusedIcon: 'magnify' },
+    { key: 'favorites', title: 'Favoritos', focusedIcon: 'heart', unfocusedIcon: 'heart-outline' },
+    { key: 'compare', title: 'Comparar', focusedIcon: 'scale-balance', unfocusedIcon: 'scale-balance' },
+    { key: 'basket', title: 'Meu Cabaz', focusedIcon: 'cart', unfocusedIcon: 'cart-outline' },
+  ]);
+
+  const { theme } = useAppTheme();
+  const colors = theme.colors;
+  const styles = createStyles(colors, spacing);
+
+  return (
+    <BottomNavigation
+      navigationState={{ index, routes }}
+      onIndexChange={setIndex}
+      renderScene={renderScene}
+      shifting={true}
+      labeled={true}
+      barStyle={styles.tabBar}
+    />
   );
 }
 

@@ -9,6 +9,7 @@ import { database } from '../model';
 import { syncDatabase } from '../services/sync';
 import SettingsModal from '../components/SettingsModal';
 import ProductCard, { SUPERMARKET_BRANDS, getSupermarket } from '../components/ProductCard';
+import { M3LoadingIndicator } from '../theme/loading';
 
 const ALL_SUPERMARKETS = 'all';
 
@@ -391,22 +392,34 @@ const SearchScreen = ({ shoppingLists, favorites, categories }) => {
         accessibilityHint="Escreve o nome de um produto para filtrar a lista"
       />
 
-      <EnhancedProductList
-        searchTerm={debouncedQuery}
-        categories={categories || []}
-        selectedSupermarket={selectedSupermarket}
-        selectedCategoryId={selectedCategoryId}
-        onSupermarketChange={handleChangeSupermarket}
-        onCategoryChange={handleChangeCategory}
-        refreshing={syncing && syncTrigger === 'pull'}
-        onRefresh={() => handleSync('pull')}
-        onAddToBasket={openAddToBasketDialog}
-        onViewHistory={handleViewHistory}
-        favoriteIds={favoriteIds}
-        onToggleFavorite={handleToggleFavorite}
-        limit={visibleLimit}
-        onLoadMore={handleLoadMore}
-      />
+      {syncing ? (
+        <View style={styles.syncLoadingContainer} accessibilityRole="progressbar" accessibilityLabel="A atualizar o catálogo">
+          <M3LoadingIndicator size={52} />
+          <Text variant="bodyMedium" style={styles.syncLoadingText}>
+            A atualizar o catálogo…
+          </Text>
+          <Text variant="bodySmall" style={styles.syncLoadingHint}>
+            Filtros indisponíveis durante a sincronização
+          </Text>
+        </View>
+      ) : (
+        <EnhancedProductList
+          searchTerm={debouncedQuery}
+          categories={categories || []}
+          selectedSupermarket={selectedSupermarket}
+          selectedCategoryId={selectedCategoryId}
+          onSupermarketChange={handleChangeSupermarket}
+          onCategoryChange={handleChangeCategory}
+          refreshing={false}
+          onRefresh={() => handleSync('pull')}
+          onAddToBasket={openAddToBasketDialog}
+          onViewHistory={handleViewHistory}
+          favoriteIds={favoriteIds}
+          onToggleFavorite={handleToggleFavorite}
+          limit={visibleLimit}
+          onLoadMore={handleLoadMore}
+        />
+      )}
 
       <SettingsModal
         visible={isSettingsVisible}
@@ -517,6 +530,22 @@ const createStyles = (colors) => StyleSheet.create({
   },
   flex: {
     flex: 1,
+  },
+  syncLoadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 32,
+  },
+  syncLoadingText: {
+    marginTop: 16,
+    color: colors.textSecondary,
+    fontWeight: '500',
+  },
+  syncLoadingHint: {
+    marginTop: 6,
+    color: colors.textMuted,
+    textAlign: 'center',
   },
   header: {
     flexDirection: 'row',

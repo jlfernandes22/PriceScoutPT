@@ -18,6 +18,11 @@ export const createPaperTheme = (isDark) => {
       danger: colors.error,
       warning: colors.onErrorContainer,
       gold: colors.tertiary,
+      textPrimary: colors.onSurface,
+      textSecondary: colors.onSurfaceVariant,
+      textMuted: colors.outline,
+      border: colors.outlineVariant,
+      borderStrong: colors.outline,
       // Paper v5 espera estes papéis extra (mantidos com os valores da seed)
       surfaceDisabled: colors.onSurface,
       onSurfaceDisabled: colors.outline,
