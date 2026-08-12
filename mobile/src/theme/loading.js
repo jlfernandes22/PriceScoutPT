@@ -292,12 +292,23 @@ const RAW_SHAPES = [
   ),
 ];
 
-const MORPH_SAMPLES = 24; // pontos comuns para interpolação (Morph resampling)
+const MORPH_SAMPLES = 36; // pontos comuns para interpolação (Morph resampling)
 
-// Cantos arredondados: para cada vértice, insere os pontos do arco do canto.
+// Cantos arredondados — geometria exata do AOSP (RoundedCorner.kt):
+// cut = radius * cot(θ/2) ao longo de cada aresta; arco de raio `radius` entre
+// os dois pontos de tangência, passando pelo interior. Vértices côncavos
+// (vales de estrela) ficam sem arredondamento (como no AOSP).
 const withRoundedCorners = (pts) => {
   const out = [];
   const n = pts.length;
+  let cx = 0;
+  let cy = 0;
+  for (const p of pts) {
+    cx += p.x;
+    cy += p.y;
+  }
+  cx /= n;
+  cy /= n;
   for (let i = 0; i < n; i++) {
     const prev = pts[(i - 1 + n) % n];
     const cur = pts[i];
@@ -307,20 +318,45 @@ const withRoundedCorners = (pts) => {
       out.push([cur.x, cur.y]);
       continue;
     }
-    const d = r * 0.22;
     const [v1x, v1y] = norm2(cur.x - prev.x, cur.y - prev.y);
     const [v2x, v2y] = norm2(next.x - cur.x, next.y - cur.y);
-    const p1 = [cur.x + v1x * d, cur.y + v1y * d];
-    const p2 = [cur.x + v2x * d, cur.y + v2y * d];
-    const dot = Math.max(-1, Math.min(1, v1x * v2x + v1y * v2y));
-    const theta = Math.acos(dot);
     const [bx, by] = norm2(v1x + v2x, v1y + v2y);
-    const arcLen = theta > 0.05 ? d / Math.cos(theta / 2) - d : 0;
-    const arcMid = [cur.x + bx * arcLen, cur.y + by * arcLen];
+    // vértice côncavo: a bissetriz aponta para fora do polígono -> sem canto
+    if ((cur.x - cx) * bx + (cur.y - cy) * by < 0) {
+      out.push([cur.x, cur.y]);
+      continue;
+    }
+    const dot = Math.max(-1, Math.min(1, v1x * v2x + v1y * v2y));
+    const sinT = Math.sqrt(1 - dot * dot);
+    if (sinT < 1e-3) {
+      out.push([cur.x, cur.y]);
+      continue;
+    }
+    const cut = r * (dot + 1) / sinT; // r * cot(θ/2)
+    const len1 = Math.hypot(cur.x - prev.x, cur.y - prev.y) / 2;
+    const len2 = Math.hypot(next.x - cur.x, next.y - cur.y) / 2;
+    const c = Math.max(0, Math.min(cut, len1, len2));
+    if (c <= 1e-4) {
+      out.push([cur.x, cur.y]);
+      continue;
+    }
+    const p1 = [cur.x + v1x * c, cur.y + v1y * c];
+    const p2 = [cur.x + v2x * c, cur.y + v2y * c];
+    const h = c / Math.cos(Math.acos(dot) / 2);
+    const center = [cur.x + bx * h, cur.y + by * h];
+    const ang1 = Math.atan2(p1[1] - center[1], p1[0] - center[0]);
+    const ang2 = Math.atan2(p2[1] - center[1], p2[0] - center[0]);
+    let da = ((ang2 - ang1 + Math.PI) % TAU + TAU) % TAU - Math.PI;
+    const midDir = Math.atan2(cur.y - center[1], cur.x - center[0]);
+    const mid = ang1 + da / 2;
+    let d = Math.abs(((mid - midDir + Math.PI) % TAU + TAU) % TAU - Math.PI);
+    if (d > Math.PI / 2) {
+      da = da > 0 ? da - TAU : da + TAU;
+    }
     out.push(p1);
-    for (let k = 1; k <= 3; k++) {
-      const t = k / 4;
-      out.push([p1[0] + (arcMid[0] - p1[0]) * t, p1[1] + (arcMid[1] - p1[1]) * t]);
+    for (let k = 1; k <= 6; k++) {
+      const a = ang1 + (da * k) / 7;
+      out.push([center[0] + r * Math.cos(a), center[1] + r * Math.sin(a)]);
     }
     out.push(p2);
   }
