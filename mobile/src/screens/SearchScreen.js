@@ -9,7 +9,8 @@ import { database } from '../model';
 import { syncDatabase } from '../services/sync';
 import SettingsModal from '../components/SettingsModal';
 import ProductCard, { SUPERMARKET_BRANDS, getSupermarket } from '../components/ProductCard';
-import { M3LoadingIndicator } from '../theme/loading';
+import { M3LoadingIndicator, M3LoadingOverlay } from '../theme/loading';
+import { useSyncState } from '../services/syncState';
 
 const ALL_SUPERMARKETS = 'all';
 
@@ -197,11 +198,11 @@ const SearchScreen = ({ shoppingLists, favorites, categories }) => {
   const theme = useTheme();
   const colors = theme.colors;
   const styles = createStyles(colors);
+  const { isSyncing, setSyncState } = useSyncState();
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [selectedSupermarket, setSelectedSupermarket] = useState(ALL_SUPERMARKETS);
   const [selectedCategoryId, setSelectedCategoryId] = useState(null);
-  const [syncing, setSyncing] = useState(false);
   const [syncTrigger, setSyncTrigger] = useState(null);
   const [syncMessage, setSyncMessage] = useState('');
   const [searchTimer, setSearchTimer] = useState(null);
@@ -245,10 +246,10 @@ const SearchScreen = ({ shoppingLists, favorites, categories }) => {
   };
 
   const handleSync = useCallback(async (trigger = 'button') => {
-    if (syncing) return;
+    if (isSyncing) return;
     Keyboard.dismiss();
-    setSyncing(true);
     setSyncTrigger(trigger);
+    setSyncState(true);
     try {
       await syncDatabase(database);
       setSyncMessage('Catálogo atualizado.');
@@ -256,10 +257,10 @@ const SearchScreen = ({ shoppingLists, favorites, categories }) => {
       console.error("[Sync Screen Error]:", e);
       setSyncMessage('Não foi possível atualizar. Verifica a ligação à internet.');
     } finally {
-      setSyncing(false);
       setSyncTrigger(null);
+      setSyncState(false);
     }
-  }, [syncing]);
+  }, [isSyncing, setSyncState]);
 
   const openAddToBasketDialog = useCallback((product) => {
     setSelectedProduct(product);
@@ -362,12 +363,12 @@ const SearchScreen = ({ shoppingLists, favorites, categories }) => {
             icon="sync"
             mode="contained-tonal"
             size={22}
-            loading={syncing && syncTrigger === 'button'}
-            disabled={syncing}
+            loading={isSyncing && syncTrigger === 'button'}
+            disabled={isSyncing}
             onPress={() => handleSync('button')}
             style={styles.headerIcon}
             accessibilityLabel="Sincronizar catálogo"
-            accessibilityState={{ busy: syncing }}
+            accessibilityState={{ busy: isSyncing }}
             accessibilityHint="Atualiza a lista de produtos a partir do servidor"
           />
           <IconButton
@@ -392,10 +393,10 @@ const SearchScreen = ({ shoppingLists, favorites, categories }) => {
         accessibilityHint="Escreve o nome de um produto para filtrar a lista"
       />
 
-      {syncing ? (
+      {isSyncing ? (
         <View style={styles.syncLoadingContainer} accessibilityRole="progressbar" accessibilityLabel="A atualizar o catálogo">
-          <M3LoadingIndicator size={52} />
-          <Text variant="bodyMedium" style={styles.syncLoadingText}>
+          <M3LoadingOverlay size={64} label="A atualizar o catálogo" />
+          <Text variant="bodyLarge" style={styles.syncLoadingText}>
             A atualizar o catálogo…
           </Text>
           <Text variant="bodySmall" style={styles.syncLoadingHint}>

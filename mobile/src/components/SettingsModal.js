@@ -6,6 +6,7 @@ import Constants from 'expo-constants';
 import { database } from '../model';
 import { API_BASE_URL } from '../config';
 import { useAppTheme } from '../theme';
+import { useSyncState } from '../services/syncState';
 import { syncDatabase } from '../services/sync';
 
 const formatLastScrape = (iso) => {
@@ -19,6 +20,7 @@ const appVersion = Constants.expoConfig?.version || '1.0.0';
 
 const SettingsModal = ({ visible, onDismiss }) => {
   const { mode: themeMode, setMode: setThemeMode } = useAppTheme();
+  const { setSyncState } = useSyncState();
   const theme = useTheme();
   const colors = theme.colors;
   const styles = createStyles(colors);
@@ -52,6 +54,7 @@ const SettingsModal = ({ visible, onDismiss }) => {
   const handleSync = async () => {
     if (syncingNow) return;
     setSyncingNow(true);
+    setSyncState(true);
     try {
       await syncDatabase(database);
       setSyncMsg('Catálogo atualizado.');
@@ -60,6 +63,7 @@ const SettingsModal = ({ visible, onDismiss }) => {
       setSyncMsg('Não foi possível atualizar. Verifica a ligação à internet.');
     } finally {
       setSyncingNow(false);
+      setSyncState(false);
     }
   };
 

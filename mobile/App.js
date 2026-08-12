@@ -11,6 +11,7 @@ import { database } from './src/model';
 import { syncDatabase } from './src/services/sync';
 import { ThemeModeProvider, useAppTheme, spacing } from './src/theme';
 import { M3LoadingIndicator, WavyProgress } from './src/theme/loading';
+import { SyncStateProvider, useSyncState } from './src/services/syncState';
 
 import SearchScreen from './src/screens/SearchScreen';
 import FavoritesScreen from './src/screens/FavoritesScreen';
@@ -24,13 +25,16 @@ const Stack = createNativeStackNavigator();
 export default function App() {
   return (
     <ThemeModeProvider>
-      <AppContent />
+      <SyncStateProvider>
+        <AppContent />
+      </SyncStateProvider>
     </ThemeModeProvider>
   );
 }
 
 function AppContent() {
   const { theme, isDark } = useAppTheme();
+  const { setSyncState } = useSyncState();
   const colors = theme.colors;
   const styles = createStyles(colors, spacing);
   const [isLoading, setIsLoading] = useState(true);
@@ -42,12 +46,14 @@ function AppContent() {
       setIsLoading(true);
     }
     setHasOnboarded(true);
+    setSyncState(true);
     try {
       await syncDatabase(database, { onProgress: background ? null : setSyncProgress });
     } catch (error) {
       console.error('[App] Erro na sincronização:', error);
     } finally {
       setIsLoading(false);
+      setSyncState(false);
     }
   };
 

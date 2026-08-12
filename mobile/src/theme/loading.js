@@ -174,9 +174,10 @@ const MORPH_SHAPES = [
   'M24 12 A12 12 0 1 1 23.99 12 Z', // círculo
   'M24 10 L40 38 L8 38 Z', // triângulo
   'M24 8 L40 24 L24 40 L8 24 Z', // losango
+  'M24 10 C34 14 40 22 40 30 C40 36 33 40 24 40 C15 40 8 36 8 30 C8 22 14 14 24 10 Z', // pílula
 ];
 
-const MorphShape = ({ d, index, count, progress, color, size }) => {
+const MorphShape = ({ d, index, count, progress, color }) => {
   const style = useAnimatedStyle(() => {
     const cycle = progress.value * count;
     const distance = Math.min(Math.abs(cycle - index), count - Math.abs(cycle - index));
@@ -203,6 +204,21 @@ export const M3LoadingIndicator = ({ size = loadingTokens.loadingIndicator.size,
     return () => cancelAnimation(progress);
   }, [progress]);
 
+  // Rotação expressiva lenta (M3 Expressive): complementa o morph
+  const rotation = useSharedValue(0);
+  useEffect(() => {
+    rotation.value = withRepeat(
+      withTiming(90, { duration: loadingTokens.loadingIndicator.cycleMs * 2, easing: ReEasing.inOut(ReEasing.sin) }),
+      -1,
+      false
+    );
+    return () => cancelAnimation(rotation);
+  }, [rotation]);
+
+  const containerStyle = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${rotation.value}deg` }],
+  }));
+
   const activeColor = overContent ? colors.onPrimaryContainer : colors.primary;
   const viewBox = `0 0 48 48`;
 
@@ -218,11 +234,13 @@ export const M3LoadingIndicator = ({ size = loadingTokens.loadingIndicator.size,
 
   return (
     <View style={[styles.indicatorContainer, { width: size, height: size }, style]} accessibilityRole="progressbar" accessibilityLabel="A carregar">
-      <Svg width={size} height={size} viewBox={viewBox}>
-        {MORPH_SHAPES.map((d, i) => (
-          <MorphShape key={i} d={d} index={i} count={count} progress={progress} color={activeColor} size={size} />
-        ))}
-      </Svg>
+      <Animated.View style={containerStyle}>
+        <Svg width={size} height={size} viewBox={viewBox}>
+          {MORPH_SHAPES.map((d, i) => (
+            <MorphShape key={i} d={d} index={i} count={count} progress={progress} color={activeColor} />
+          ))}
+        </Svg>
+      </Animated.View>
     </View>
   );
 };
