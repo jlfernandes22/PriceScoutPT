@@ -292,21 +292,22 @@ const RAW_SHAPES = [
 
 const MORPH_SAMPLES = 24; // pontos comuns para interpolação (Morph resampling)
 
-// Cantos arredondados — geometria exata do AOSP (RoundedCorner.kt):
-// cut = radius * cot(θ/2) ao longo de cada aresta; arco de raio `radius` entre
-// os dois pontos de tangência, passando pelo interior. Vértices côncavos
-// (vales de estrela) ficam sem arredondamento (como no AOSP).
+// Cantos arredondados por bézier quadrático (controlo no vértice): a curva
+// fica sempre dentro do triângulo (p1, vértice, p2) — é matematicamente
+// impossível criar auto-intersecções, mesmo com arredondamento forte.
+// cut = raio * cot(θ/2) (como no AOSP), limitado a metade da aresta.
 const withRoundedCorners = (pts) => {
   const out = [];
   const n = pts.length;
-  let cx = 0;
-  let cy = 0;
-  for (const p of pts) {
-    cx += p.x;
-    cy += p.y;
+
+  let area2 = 0;
+  for (let i = 0; i < n; i++) {
+    const a = pts[i];
+    const b = pts[(i + 1) % n];
+    area2 += a.x * b.y - b.x * a.y;
   }
-  cx /= n;
-  cy /= n;
+  const winding = area2 > 0 ? 1 : -1;
+
   for (let i = 0; i < n; i++) {
     const prev = pts[(i - 1 + n) % n];
     const cur = pts[i];
@@ -316,23 +317,24 @@ const withRoundedCorners = (pts) => {
       out.push([cur.x, cur.y]);
       continue;
     }
-    const [v1x, v1y] = norm2(cur.x - prev.x, cur.y - prev.y);
-    const [v2x, v2y] = norm2(next.x - cur.x, next.y - cur.y);
-    const [bx, by] = norm2(v1x + v2x, v1y + v2y);
-    // vértice côncavo: a bissetriz aponta para fora do polígono -> sem canto
-    if ((cur.x - cx) * bx + (cur.y - cy) * by < 0) {
+    // vértice côncavo -> sem arredondamento (canto vivo)
+    const crossRaw = (cur.x - prev.x) * (next.y - cur.y) - (cur.y - prev.y) * (next.x - cur.x);
+    if (crossRaw * winding <= 0) {
       out.push([cur.x, cur.y]);
       continue;
     }
+    const [v1x, v1y] = norm2(cur.x - prev.x, cur.y - prev.y);
+    const [v2x, v2y] = norm2(next.x - cur.x, next.y - cur.y);
     const dot = Math.max(-1, Math.min(1, v1x * v2x + v1y * v2y));
     const sinT = Math.sqrt(1 - dot * dot);
     if (sinT < 1e-3) {
       out.push([cur.x, cur.y]);
       continue;
     }
-    const cut = r * (dot + 1) / sinT; // r * cot(θ/2)
-    const len1 = Math.hypot(cur.x - prev.x, cur.y - prev.y) / 2;
-    const len2 = Math.hypot(next.x - cur.x, next.y - cur.y) / 2;
+    // cut = r * cot(θ/2); clamp a 45% de cada aresta (evita sobreposição)
+    const cut = r * (dot + 1) / sinT;
+    const len1 = Math.hypot(cur.x - prev.x, cur.y - prev.y) * 0.45;
+    const len2 = Math.hypot(next.x - cur.x, next.y - cur.y) * 0.45;
     const c = Math.max(0, Math.min(cut, len1, len2));
     if (c <= 1e-4) {
       out.push([cur.x, cur.y]);
@@ -340,21 +342,14 @@ const withRoundedCorners = (pts) => {
     }
     const p1 = [cur.x + v1x * c, cur.y + v1y * c];
     const p2 = [cur.x + v2x * c, cur.y + v2y * c];
-    const h = c / Math.cos(Math.acos(dot) / 2);
-    const center = [cur.x + bx * h, cur.y + by * h];
-    const ang1 = Math.atan2(p1[1] - center[1], p1[0] - center[0]);
-    const ang2 = Math.atan2(p2[1] - center[1], p2[0] - center[0]);
-    let da = ((ang2 - ang1 + Math.PI) % TAU + TAU) % TAU - Math.PI;
-    const midDir = Math.atan2(cur.y - center[1], cur.x - center[0]);
-    const mid = ang1 + da / 2;
-    let d = Math.abs(((mid - midDir + Math.PI) % TAU + TAU) % TAU - Math.PI);
-    if (d > Math.PI / 2) {
-      da = da > 0 ? da - TAU : da + TAU;
-    }
     out.push(p1);
-    for (let k = 1; k <= 6; k++) {
-      const a = ang1 + (da * k) / 7;
-      out.push([center[0] + r * Math.cos(a), center[1] + r * Math.sin(a)]);
+    for (let k = 1; k <= 5; k++) {
+      const t = k / 6;
+      const mt = 1 - t;
+      out.push([
+        mt * mt * p1[0] + 2 * mt * t * cur.x + t * t * p2[0],
+        mt * mt * p1[1] + 2 * mt * t * cur.y + t * t * p2[1],
+      ]);
     }
     out.push(p2);
   }
