@@ -171,6 +171,7 @@ const ProductList = memo(function ProductList({
 });
 
 const PAGE_SIZE = 60;
+const MIN_SYNC_LOADING_MS = 1200;
 const MAX_LIST_RESULTS = 60000;
 
 const enhanceList = withObservables(
@@ -255,6 +256,7 @@ const SearchScreen = ({ shoppingLists, favorites, categories }) => {
     Keyboard.dismiss();
     setSyncTrigger(trigger);
     setSyncState(true);
+    const startedAt = Date.now();
     try {
       await syncDatabase(database);
       setSyncMessage('Catálogo atualizado.');
@@ -262,8 +264,13 @@ const SearchScreen = ({ shoppingLists, favorites, categories }) => {
       console.error("[Sync Screen Error]:", e);
       setSyncMessage('Não foi possível atualizar. Verifica a ligação à internet.');
     } finally {
-      setSyncTrigger(null);
-      setSyncState(false);
+      // Tempo mínimo visível do loading MD3 (≈1 ciclo do morph) para o
+      // utilizador perceber a sincronização mesmo quando o delta é instantâneo.
+      const remaining = Math.max(0, MIN_SYNC_LOADING_MS - (Date.now() - startedAt));
+      setTimeout(() => {
+        setSyncTrigger(null);
+        setSyncState(false);
+      }, remaining);
     }
   }, [isSyncing, setSyncState]);
 

@@ -21,6 +21,7 @@ import OnboardingScreen from './src/screens/OnboardingScreen';
 import ProductHistoryScreen from './src/screens/ProductHistoryScreen';
 
 const Stack = createNativeStackNavigator();
+const MIN_SYNC_LOADING_MS = 1200;
 
 export default function App() {
   return (
@@ -47,13 +48,18 @@ function AppContent() {
     }
     setHasOnboarded(true);
     setSyncState(true);
+    const startedAt = Date.now();
     try {
       await syncDatabase(database, { onProgress: background ? null : setSyncProgress });
     } catch (error) {
       console.error('[App] Erro na sincronização:', error);
     } finally {
-      setIsLoading(false);
-      setSyncState(false);
+      // Tempo mínimo visível do loading MD3 (mesmo para deltas instantâneos)
+      const remaining = Math.max(0, MIN_SYNC_LOADING_MS - (Date.now() - startedAt));
+      setTimeout(() => {
+        setIsLoading(false);
+        setSyncState(false);
+      }, remaining);
     }
   };
 
