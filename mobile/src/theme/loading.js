@@ -14,8 +14,7 @@ import Animated, {
   cancelAnimation,
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
-import LottieView from 'lottie-react-native';
-import m3loadingJson from './m3loading.json';
+
 import Svg, { Path } from 'react-native-svg';
 import { loading as loadingTokens, shape } from './tokens';
 import { useReduceMotion } from './motion';
@@ -466,46 +465,15 @@ const springResponse = (tSec) => {
   return 1 - e * (Math.cos(omegad * tSec) + ((zeta * omega) / omegad) * Math.sin(omegad * tSec));
 };
 
-// Converte '#RRGGBB' para o formato RGBA 0..1 usado pelo Lottie
-const hexToLottieColor = (hex) => {
-  const h = hex.replace('#', '');
-  const int = parseInt(h, 16);
-  return [
-    ((int >> 16) & 255) / 255,
-    ((int >> 8) & 255) / 255,
-    (int & 255) / 255,
-    1,
-  ];
-};
-
 export const M3LoadingIndicator = ({ size = loadingTokens.loadingIndicator.size, overContent = false, style }) => {
   const theme = useTheme();
   const reduceMotion = useReduceMotion();
-  const activeColor = overContent ? theme.colors.onPrimaryContainer : theme.colors.primary;
+  const colors = theme.colors;
+  const activeColor = overContent ? colors.onPrimaryContainer : colors.primary;
 
-  // Cor aplicada diretamente no JSON (sem colorFilters — elimina a dependência
-  // do keypath nativo). Deep-copy mínimo com a cor do tema.
-  const source = useMemo(() => {
-    const copy = {
-      ...m3loadingJson,
-      layers: m3loadingJson.layers.map((layer) => ({
-        ...layer,
-        shapes: layer.shapes.map((gr) => ({
-          ...gr,
-          it: gr.it.map((item) =>
-            item.ty === 'fl'
-              ? { ...item, c: { a: 0, k: hexToLottieColor(activeColor) } }
-              : item
-          ),
-        })),
-      })),
-    };
-    return copy;
-  }, [activeColor]);
-
-  // Playback manual via `progress` (nativo, fiável) — evita os bugs de
-  // autoPlay/loop do lottie-react-native neste stack.
-  const [progress, setProgress] = useState(0);
+  // Animação 100% state-driven (rAF + re-render React + SVG puro):
+  // é o único mecanismo que comprovadamente renderiza e move neste stack.
+  const [morph, setMorph] = useState({ idx: 0, frac: 0, scale: 1, rot: 0 });
   const reduceMotionRef = useRef(reduceMotion);
   useEffect(() => {
     if (reduceMotionRef.current) return;
@@ -513,20 +481,34 @@ export const M3LoadingIndicator = ({ size = loadingTokens.loadingIndicator.size,
     const startedAt = Date.now();
     const tick = () => {
       const elapsed = Date.now() - startedAt;
-      setProgress((elapsed % 4550) / 4550);
+      const idx = Math.floor(elapsed / MORPH_INTERVAL_MS) % MORPH_SHAPES.length;
+      const tIn = elapsed % MORPH_INTERVAL_MS;
+      const tt = Math.min(1, tIn / SPRING_DURATION_MS);
+      const spring = springResponse(tt * (SPRING_DURATION_MS / 1000));
+      // morph coerido (sem overshoot na geometria); bounce na escala
+      const frac = Math.max(0, Math.min(1, spring));
+      const scale = 1 + Math.max(0, spring - 1);
+      // rotação horária: frac*90 + 90/passo + contínua 360/4666ms
+      const rot = frac * 90 + ((idx + 1) % 4) * 90 + ((elapsed % ROTATION_CYCLE_MS) / ROTATION_CYCLE_MS) * 360;
+      setMorph({ idx, frac, scale, rot });
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
   }, []);
 
+  const a = MORPH_SHAPES[morph.idx];
+  const b = MORPH_SHAPES[(morph.idx + 1) % MORPH_SHAPES.length];
+  const d = useMemo(() => morphPathForPair(a, b, morph.frac), [morph.idx, morph.frac]);
+  const viewBox = '0 0 48 48';
+
   return (
     <View style={[styles.indicatorContainer, { width: size, height: size }, style]} accessibilityRole="progressbar" accessibilityLabel="A carregar">
-      <LottieView
-        source={source}
-        style={{ width: size, height: size }}
-        progress={progress}
-      />
+      <View style={{ transform: [{ rotate: `${morph.rot}deg` }, { scale: morph.scale }] }}>
+        <Svg width={size} height={size} viewBox={viewBox}>
+          <Path d={d} fill={activeColor} />
+        </Svg>
+      </View>
     </View>
   );
 };
