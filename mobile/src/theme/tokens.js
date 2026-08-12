@@ -29,37 +29,73 @@ export const DEFAULT_BRAND_COLOR = '#636363';
 
 const _theme = themeFromSourceColor(argbFromHex(BRAND_SEED_COLOR));
 
+// As roles da classe Scheme são getters no protótipo (não enumeráveis) —
+// Object.entries() não as vê. Lemos os nomes do protótipo diretamente.
 const toHexScheme = (scheme) => {
+  const proto = Object.getPrototypeOf(scheme) || {};
   const roles = {};
-  Object.entries(scheme).forEach(([role, value]) => {
-    roles[role] = value ? hexFromArgb(value) : value;
-  });
+  const names = Object.getOwnPropertyNames(proto).filter((k) => k !== 'constructor');
+  for (const role of names) {
+    const value = scheme[role];
+    roles[role] = value !== undefined ? hexFromArgb(value) : value;
+  }
   return roles;
 };
+
+const _lightScheme = toHexScheme(_theme.schemes.light);
+const _darkScheme = toHexScheme(_theme.schemes.dark);
+
+// Roles que o Scheme de 0.3.0 não expõe — derivadas das paletas tonais
+// oficiais (tons MD3: containers 4/10/12/17/22; outline 50/80; inversas...).
+const deriveRoles = (base, isDark) => {
+  const neutral = (t) => hexFromArgb(_theme.palettes.neutral.tone(t));
+  const neutralVariant = (t) => hexFromArgb(_theme.palettes.neutralVariant.tone(t));
+  const primaryTone = (t) => hexFromArgb(_theme.palettes.primary.tone(t));
+  return {
+    ...base,
+    outline: neutralVariant(isDark ? 80 : 50),
+    outlineVariant: neutralVariant(isDark ? 30 : 80),
+    scrim: '#000000',
+    shadow: '#000000',
+    inverseSurface: neutral(isDark ? 20 : 90),
+    inverseOnSurface: neutral(isDark ? 95 : 20),
+    inversePrimary: primaryTone(isDark ? 40 : 80),
+    surfaceTint: base.primary,
+    backdrop: '#000000',
+    surfaceContainerLowest: neutral(4),
+    surfaceContainerLow: neutral(10),
+    surfaceContainer: neutral(12),
+    surfaceContainerHigh: neutral(17),
+    surfaceContainerHighest: neutral(22),
+  };
+};
+
+const _lightFull = deriveRoles(_lightScheme, false);
+const _darkFull = deriveRoles(_darkScheme, true);
 
 // MD3 roles (spec m3.material.io). Paper usa `elevation.level0..5`; os
 // surfaceContainer* são a componente tonal da elevação.
 export const lightColors = {
-  ...toHexScheme(_theme.schemes.light),
+  ..._lightFull,
   elevation: {
-    level0: toHexScheme(_theme.schemes.light).surfaceContainerLowest,
-    level1: toHexScheme(_theme.schemes.light).surfaceContainerLow,
-    level2: toHexScheme(_theme.schemes.light).surfaceContainer,
-    level3: toHexScheme(_theme.schemes.light).surfaceContainerHigh,
-    level4: toHexScheme(_theme.schemes.light).surfaceContainerHigh,
-    level5: toHexScheme(_theme.schemes.light).surfaceContainerHighest,
+    level0: _lightFull.surfaceContainerLowest,
+    level1: _lightFull.surfaceContainerLow,
+    level2: _lightFull.surfaceContainer,
+    level3: _lightFull.surfaceContainerHigh,
+    level4: _lightFull.surfaceContainerHigh,
+    level5: _lightFull.surfaceContainerHighest,
   },
 };
 
 export const darkColors = {
-  ...toHexScheme(_theme.schemes.dark),
+  ..._darkFull,
   elevation: {
-    level0: toHexScheme(_theme.schemes.dark).surfaceContainerLowest,
-    level1: toHexScheme(_theme.schemes.dark).surfaceContainerLow,
-    level2: toHexScheme(_theme.schemes.dark).surfaceContainer,
-    level3: toHexScheme(_theme.schemes.dark).surfaceContainerHigh,
-    level4: toHexScheme(_theme.schemes.dark).surfaceContainerHigh,
-    level5: toHexScheme(_theme.schemes.dark).surfaceContainerHighest,
+    level0: _darkFull.surfaceContainerLowest,
+    level1: _darkFull.surfaceContainerLow,
+    level2: _darkFull.surfaceContainer,
+    level3: _darkFull.surfaceContainerHigh,
+    level4: _darkFull.surfaceContainerHigh,
+    level5: _darkFull.surfaceContainerHighest,
   },
 };
 
