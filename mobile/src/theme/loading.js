@@ -166,27 +166,195 @@ export const WavyProgress = ({ height = loadingTokens.wavy.height, style }) => {
 };
 
 // ------------------------------------------------------------
-// M3 LoadingIndicator (§4.6.C) — morph entre formas (cross-fade),
-// para esperas 200ms–5s indeterminadas.
+// M3 LoadingIndicator (§4.6.C) — implementação fiel ao componente oficial
+// Android (androidx.compose.material3expressive.LoadingIndicator):
+//   • sequência oficial de formas (MaterialShapes): SoftBurst → Cookie9Sided →
+//     Pentagon → Pill → Sunny → Cookie4Sided → Oval
+//   • morph REAL por interpolação de vértices (RoundedPolygon.Morph), não cross-fade
+//   • rotação no sentido anti-horário: -progress × 180°
+// Para esperas 200ms–5s indeterminadas.
 // ------------------------------------------------------------
-const MORPH_SHAPES = [
-  'M12 12 L36 12 L36 36 L12 36 Z', // quadrado
-  'M24 12 A12 12 0 1 1 23.99 12 Z', // círculo
-  'M24 10 L40 38 L8 38 Z', // triângulo
-  'M24 8 L40 24 L24 40 L8 24 Z', // losango
-  'M24 10 C34 14 40 22 40 30 C40 36 33 40 24 40 C15 40 8 36 8 30 C8 22 14 14 24 10 Z', // pílula
+const TAU = Math.PI * 2;
+
+const rot2 = (x, y, a) => [x * Math.cos(a) - y * Math.sin(a), x * Math.sin(a) + y * Math.cos(a)];
+const norm2 = (x, y) => {
+  const l = Math.hypot(x, y) || 1;
+  return [x / l, y / l];
+};
+
+// Formas oficiais (androidx.compose.material3.MaterialShapes) como polígonos
+// com vértices em [0,1]² e raio de canto por vértice (0 = pontiagudo).
+const buildStar = (n, inner, rounding) => {
+  const pts = [];
+  for (let i = 0; i < 2 * n; i++) {
+    const ang = -Math.PI / 2 + (i * Math.PI) / n;
+    const rad = i % 2 === 0 ? 0.5 : 0.5 * inner;
+    pts.push({ x: 0.5 + rad * Math.cos(ang), y: 0.5 + rad * Math.sin(ang), r: rounding });
+  }
+  return pts;
+};
+
+// customPolygon do AOSP: base + repetições rotacionadas (+ espelho opcional)
+const buildReps = (base, reps, mirror = false) => {
+  const pts = [];
+  const step = TAU / reps;
+  for (let i = 0; i < reps; i++) {
+    const base2 = mirror ? base.concat(base.map((p) => ({ x: -p.x + 1, y: p.y, r: p.r || 0 }))) : base;
+    for (const p of base2) {
+      const [x, y] = rot2(p.x - 0.5, p.y - 0.5, step * i);
+      pts.push({ x: x + 0.5, y: y + 0.5, r: p.r || 0 });
+    }
+  }
+  return pts;
+};
+
+const rotateShape = (pts, deg) =>
+  pts.map((p) => {
+    const [x, y] = rot2(p.x - 0.5, p.y - 0.5, (deg * Math.PI) / 180);
+    return { x: x + 0.5, y: y + 0.5, r: p.r || 0 };
+  });
+
+// Sequência oficial indeterminada (MaterialShapes):
+// SoftBurst, Cookie9Sided, Pentagon, Pill, Sunny, Cookie4Sided, Oval
+const RAW_SHAPES = [
+  // SoftBurst: reps=10, r=0.053
+  buildReps(
+    [
+      { x: 0.193, y: 0.277, r: 0.053 },
+      { x: 0.176, y: 0.055, r: 0.053 },
+    ],
+    10
+  ),
+  // Cookie9Sided: star(9, inner 0.8, r 0.5) rot -90°
+  rotateShape(buildStar(9, 0.8, 0.5), -90),
+  // Pentagon: 3 pts + espelho, r ~0.168
+  buildReps(
+    [
+      { x: 0.5, y: -0.009, r: 0.172 },
+      { x: 1.03, y: 0.365, r: 0.164 },
+      { x: 0.828, y: 0.97, r: 0.169 },
+    ],
+    1,
+    true
+  ),
+  // Pill: 3 pts + espelho, r 0.426 / 0 / 1.0
+  buildReps(
+    [
+      { x: 0.961, y: 0.039, r: 0.426 },
+      { x: 1.001, y: 0.428, r: 0 },
+      { x: 1.0, y: 0.609, r: 1.0 },
+    ],
+    1,
+    true
+  ),
+  // Sunny: star(8, inner 0.8, r 0.15)
+  buildStar(8, 0.8, 0.15),
+  // Cookie4Sided: 2 pts, reps=4, r ~0.245
+  buildReps(
+    [
+      { x: 1.237, y: 1.236, r: 0.258 },
+      { x: 0.5, y: 0.918, r: 0.233 },
+    ],
+    4
+  ),
+  // Oval: circle(10) × scale(1, 0.64) rot -45°
+  rotateShape(
+    Array.from({ length: 10 }, (_, i) => {
+      const ang = (i * TAU) / 10;
+      return { x: 0.5 + 0.5 * Math.cos(ang), y: 0.5 + 0.32 * Math.sin(ang), r: 0 };
+    }),
+    -45
+  ),
 ];
 
-const MorphShape = ({ d, index, count, progress, color }) => {
-  // useAnimatedProps é o padrão suportado para SVG no Reanimated (styles
-  // animados não são aplicados de forma fiável aos elementos react-native-svg).
-  const animatedProps = useAnimatedProps(() => {
-    const cycle = progress.value * count;
-    const distance = Math.min(Math.abs(cycle - index), count - Math.abs(cycle - index));
-    const opacity = Math.max(0, 1 - distance);
-    return { opacity };
-  });
-  return <AnimatedPath d={d} fill={color} animatedProps={animatedProps} />;
+const MORPH_SAMPLES = 24; // pontos comuns para interpolação (Morph resampling)
+
+// Cantos arredondados: para cada vértice, insere os pontos do arco do canto.
+const withRoundedCorners = (pts) => {
+  const out = [];
+  const n = pts.length;
+  for (let i = 0; i < n; i++) {
+    const prev = pts[(i - 1 + n) % n];
+    const cur = pts[i];
+    const next = pts[(i + 1) % n];
+    const r = cur.r || 0;
+    if (r <= 0.001) {
+      out.push([cur.x, cur.y]);
+      continue;
+    }
+    const d = r * 0.22;
+    const [v1x, v1y] = norm2(cur.x - prev.x, cur.y - prev.y);
+    const [v2x, v2y] = norm2(next.x - cur.x, next.y - cur.y);
+    const p1 = [cur.x + v1x * d, cur.y + v1y * d];
+    const p2 = [cur.x + v2x * d, cur.y + v2y * d];
+    const dot = Math.max(-1, Math.min(1, v1x * v2x + v1y * v2y));
+    const theta = Math.acos(dot);
+    const [bx, by] = norm2(v1x + v2x, v1y + v2y);
+    const arcLen = theta > 0.05 ? d / Math.cos(theta / 2) - d : 0;
+    const arcMid = [cur.x + bx * arcLen, cur.y + by * arcLen];
+    out.push(p1);
+    for (let k = 1; k <= 3; k++) {
+      const t = k / 4;
+      out.push([p1[0] + (arcMid[0] - p1[0]) * t, p1[1] + (arcMid[1] - p1[1]) * t]);
+    }
+    out.push(p2);
+  }
+  return out;
+};
+
+// Reamostragem por perímetro para um número comum de pontos (Morph resampling)
+const resample = (pts, count) => {
+  let perim = 0;
+  const cum = [0];
+  for (let i = 0; i < pts.length; i++) {
+    const [x1, y1] = pts[i];
+    const [x2, y2] = pts[(i + 1) % pts.length];
+    perim += Math.hypot(x2 - x1, y2 - y1);
+    cum.push(perim);
+  }
+  const out = [];
+  const step = perim / count;
+  let seg = 0;
+  for (let k = 0; k < count; k++) {
+    const target = k * step;
+    while (seg < pts.length && cum[seg + 1] < target) seg += 1;
+    const [x1, y1] = pts[seg % pts.length];
+    const [x2, y2] = pts[(seg + 1) % pts.length];
+    const segLen = cum[seg + 1] - cum[seg] || 1;
+    const t = (target - cum[seg]) / segLen;
+    out.push([x1 + (x2 - x1) * t, y1 + (y2 - y1) * t]);
+  }
+  return out;
+};
+
+// Normalização para a caixa unitária (equivalente ao RoundedPolygon.normalized())
+const normalizeShape = (pts) => {
+  const xs = pts.map((p) => p[0]);
+  const ys = pts.map((p) => p[1]);
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const minY = Math.min(...ys);
+  const maxY = Math.max(...ys);
+  const scale = Math.max(maxX - minX, maxY - minY) || 1;
+  return pts.map(([x, y]) => [
+    0.5 + (x - (minX + maxX) / 2) / scale,
+    0.5 + (y - (minY + maxY) / 2) / scale,
+  ]);
+};
+
+// Polígonos finais (pontos comuns) — pré-computados no arranque.
+const MORPH_SHAPES = RAW_SHAPES.map((s) => normalizeShape(resample(withRoundedCorners(s), MORPH_SAMPLES)));
+
+// Constrói o path SVG fechado com curvas suaves a partir dos pontos interpolados
+const buildMorphPath = (pts) => {
+  let d = `M ${(pts[0][0] * 48).toFixed(2)} ${(pts[0][1] * 48).toFixed(2)}`;
+  for (let i = 1; i < pts.length; i += 3) {
+    const p1 = pts[i];
+    const p2 = pts[(i + 1) % pts.length];
+    const p3 = pts[(i + 2) % pts.length];
+    d += ` C ${(p1[0] * 48).toFixed(2)} ${(p1[1] * 48).toFixed(2)}, ${(p2[0] * 48).toFixed(2)} ${(p2[1] * 48).toFixed(2)}, ${(p3[0] * 48).toFixed(2)} ${(p3[1] * 48).toFixed(2)}`;
+  }
+  return d + ' Z';
 };
 
 export const M3LoadingIndicator = ({ size = loadingTokens.loadingIndicator.size, overContent = false, style }) => {
@@ -205,11 +373,25 @@ export const M3LoadingIndicator = ({ size = loadingTokens.loadingIndicator.size,
     return () => cancelAnimation(progress);
   }, [progress]);
 
-  // Rotação expressiva lenta (M3 Expressive): complementa o morph
+  // Morph real: interpola os vértices entre a forma ativa e a seguinte
+  const pathProps = useAnimatedProps(() => {
+    const cycle = progress.value * count;
+    const idx = Math.floor(cycle) % count;
+    const frac = cycle - Math.floor(cycle);
+    const a = MORPH_SHAPES[idx];
+    const b = MORPH_SHAPES[(idx + 1) % count];
+    const pts = new Array(MORPH_SAMPLES);
+    for (let i = 0; i < MORPH_SAMPLES; i++) {
+      pts[i] = [a[i][0] + (b[i][0] - a[i][0]) * frac, a[i][1] + (b[i][1] - a[i][1]) * frac];
+    }
+    return { d: buildMorphPath(pts) };
+  });
+
+  // Rotação oficial: -progress × 180° (sentido anti-horário)
   const rotation = useSharedValue(0);
   useEffect(() => {
     rotation.value = withRepeat(
-      withTiming(90, { duration: loadingTokens.loadingIndicator.cycleMs * 2, easing: ReEasing.inOut(ReEasing.sin) }),
+      withTiming(1, { duration: loadingTokens.loadingIndicator.cycleMs, easing: ReEasing.linear }),
       -1,
       false
     );
@@ -217,7 +399,7 @@ export const M3LoadingIndicator = ({ size = loadingTokens.loadingIndicator.size,
   }, [rotation]);
 
   const containerStyle = useAnimatedStyle(() => ({
-    transform: [{ rotate: `${rotation.value}deg` }],
+    transform: [{ rotate: `${-rotation.value * 180}deg` }],
   }));
 
   const activeColor = overContent ? colors.onPrimaryContainer : colors.primary;
@@ -227,7 +409,7 @@ export const M3LoadingIndicator = ({ size = loadingTokens.loadingIndicator.size,
     return (
       <View style={[styles.indicatorContainer, { width: size, height: size }, style]} accessibilityRole="progressbar" accessibilityLabel="A carregar">
         <Svg width={size} height={size} viewBox={viewBox}>
-          <Path d={MORPH_SHAPES[0]} fill={activeColor} />
+          <Path d={buildMorphPath(MORPH_SHAPES[0])} fill={activeColor} />
         </Svg>
       </View>
     );
@@ -237,9 +419,7 @@ export const M3LoadingIndicator = ({ size = loadingTokens.loadingIndicator.size,
     <View style={[styles.indicatorContainer, { width: size, height: size }, style]} accessibilityRole="progressbar" accessibilityLabel="A carregar">
       <Animated.View style={containerStyle}>
         <Svg width={size} height={size} viewBox={viewBox}>
-          {MORPH_SHAPES.map((d, i) => (
-            <MorphShape key={i} d={d} index={i} count={count} progress={progress} color={activeColor} />
-          ))}
+          <AnimatedPath animatedProps={pathProps} fill={activeColor} />
         </Svg>
       </Animated.View>
     </View>
