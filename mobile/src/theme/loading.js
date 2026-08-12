@@ -16,7 +16,7 @@ import Animated, {
 import { LinearGradient } from 'expo-linear-gradient';
 
 import Svg, { Path } from 'react-native-svg';
-import { loading as loadingTokens, shape } from './tokens';
+import { loading as loadingTokens, shape, supermarketBrands } from './tokens';
 import { useReduceMotion } from './motion';
 
 // ------------------------------------------------------------
@@ -465,50 +465,76 @@ const springResponse = (tSec) => {
   return 1 - e * (Math.cos(omegad * tSec) + ((zeta * omega) / omegad) * Math.sin(omegad * tSec));
 };
 
+// Cometas de marca: 5 pontos nas cores dos supermercados (Continente, Lidl,
+// Pingo Doce, Aldi, Auchan) a perseguirem-se numa órbita em torno de um núcleo
+// pulsante. 100% state-driven (rAF + Views) — renderização garantida.
+const BRAND_ORBIT_COLORS = Object.values(supermarketBrands).map((b) => b.color);
+
 export const M3LoadingIndicator = ({ size = loadingTokens.loadingIndicator.size, overContent = false, style }) => {
   const theme = useTheme();
   const reduceMotion = useReduceMotion();
   const colors = theme.colors;
-  const activeColor = overContent ? colors.onPrimaryContainer : colors.primary;
 
-  // Animação 100% state-driven (rAF + re-render React + SVG puro):
-  // é o único mecanismo que comprovadamente renderiza e move neste stack.
-  const [morph, setMorph] = useState({ idx: 0, frac: 0, scale: 1, rot: 0 });
+  const [t, setT] = useState(0);
   const reduceMotionRef = useRef(reduceMotion);
   useEffect(() => {
     if (reduceMotionRef.current) return;
     let raf = 0;
     const startedAt = Date.now();
     const tick = () => {
-      const elapsed = Date.now() - startedAt;
-      const idx = Math.floor(elapsed / MORPH_INTERVAL_MS) % MORPH_SHAPES.length;
-      const tIn = elapsed % MORPH_INTERVAL_MS;
-      const tt = Math.min(1, tIn / SPRING_DURATION_MS);
-      const spring = springResponse(tt * (SPRING_DURATION_MS / 1000));
-      // morph coerido (sem overshoot na geometria); bounce na escala
-      const frac = Math.max(0, Math.min(1, spring));
-      const scale = 1 + Math.max(0, spring - 1);
-      // rotação horária: frac*90 + 90/passo + contínua 360/4666ms
-      const rot = frac * 90 + ((idx + 1) % 4) * 90 + ((elapsed % ROTATION_CYCLE_MS) / ROTATION_CYCLE_MS) * 360;
-      setMorph({ idx, frac, scale, rot });
+      setT((Date.now() - startedAt) / 2400);
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
   }, []);
 
-  const a = MORPH_SHAPES[morph.idx];
-  const b = MORPH_SHAPES[(morph.idx + 1) % MORPH_SHAPES.length];
-  const d = useMemo(() => morphPathForPair(a, b, morph.frac), [morph.idx, morph.frac]);
-  const viewBox = '0 0 48 48';
+  const orbitR = size * 0.36;
+  const cx = size / 2;
+  const cy = size / 2;
+  const dot = size * 0.17;
+  const baseAngle = t * TAU;
 
   return (
     <View style={[styles.indicatorContainer, { width: size, height: size }, style]} accessibilityRole="progressbar" accessibilityLabel="A carregar">
-      <View style={{ transform: [{ rotate: `${morph.rot}deg` }, { scale: morph.scale }] }}>
-        <Svg width={size} height={size} viewBox={viewBox}>
-          <Path d={d} fill={activeColor} />
-        </Svg>
-      </View>
+      {BRAND_ORBIT_COLORS.map((color, i) => {
+        // cometas: lider à frente, cauda encolhe/esbate (bunched + trail)
+        const offset = i * 0.16;
+        const ang = baseAngle - offset;
+        const x = cx + orbitR * Math.cos(ang) - dot / 2;
+        const y = cy + orbitR * Math.sin(ang) - dot / 2;
+        const trail = 1 - i * 0.17;
+        const d = dot * (0.55 + 0.45 * trail);
+        return (
+          <View
+            key={i}
+            style={{
+              position: 'absolute',
+              left: x + (dot - d) / 2,
+              top: y + (dot - d) / 2,
+              width: d,
+              height: d,
+              borderRadius: d / 2,
+              backgroundColor: color,
+              opacity: trail,
+            }}
+          />
+        );
+      })}
+      {/* núcleo pulsante */}
+      <View
+        style={{
+          position: 'absolute',
+          left: cx - dot * 0.5,
+          top: cy - dot * 0.5,
+          width: dot,
+          height: dot,
+          borderRadius: dot / 2,
+          backgroundColor: colors.primary,
+          opacity: 0.9 + 0.1 * Math.sin(t * TAU * 2),
+          transform: [{ scale: 1 + 0.15 * Math.sin(t * TAU * 2) }],
+        }}
+      />
     </View>
   );
 };
