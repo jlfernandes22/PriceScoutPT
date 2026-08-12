@@ -218,7 +218,7 @@ export const loading = {
     cycleMs: 1500,
   },
   loadingIndicator: {
-    size: 48,
+    size: 38, // LoadingIndicatorTokens.ActiveSize
     minSize: 24,
     maxSize: 240,
     cycleMs: 1400,

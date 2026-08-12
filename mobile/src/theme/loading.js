@@ -517,16 +517,18 @@ export const M3LoadingIndicator = ({ size = loadingTokens.loadingIndicator.size,
   );
 };
 
-// Wrapper circular para usar sobre conteúdo (M3 especifica)
-export const M3LoadingOverlay = ({ size, label }) => {
+// Wrapper circular para usar sobre conteúdo (M3 especifica):
+// ContainerWidth/Height = 48dp; forma ativa = ActiveSize 38dp (≈79% do contentor);
+// ContainedContainerColor = PrimaryContainer; ContainedActiveColor = OnPrimaryContainer.
+export const M3LoadingOverlay = ({ size = 48, label }) => {
   const theme = useTheme();
   return (
     <View
-      style={[styles.overlay, { backgroundColor: theme.colors.surfaceContainerHigh }]}
+      style={[styles.overlay, { backgroundColor: theme.colors.primaryContainer, width: size, height: size, borderRadius: size / 2 }]}
       accessible
       accessibilityLabel={label || 'A carregar'}
     >
-      <M3LoadingIndicator size={size} overContent />
+      <M3LoadingIndicator size={size * 0.79} overContent />
     </View>
   );
 };
@@ -578,9 +580,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   overlay: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
     alignItems: 'center',
     justifyContent: 'center',
   },

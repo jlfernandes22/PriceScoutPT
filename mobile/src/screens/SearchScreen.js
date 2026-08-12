@@ -407,7 +407,7 @@ const SearchScreen = ({ shoppingLists, favorites, categories }) => {
 
       {isSyncing ? (
         <View style={styles.syncLoadingContainer} accessibilityRole="progressbar" accessibilityLabel="A atualizar o catálogo">
-          <M3LoadingOverlay size={64} label="A atualizar o catálogo" />
+          <M3LoadingOverlay size={48} label="A atualizar o catálogo" />
           <Text variant="bodyLarge" style={styles.syncLoadingText}>
             A atualizar o catálogo…
           </Text>
