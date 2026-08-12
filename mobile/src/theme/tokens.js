@@ -62,11 +62,11 @@ const deriveRoles = (base, isDark) => {
     inversePrimary: primaryTone(isDark ? 40 : 80),
     surfaceTint: base.primary,
     backdrop: '#000000',
-    surfaceContainerLowest: neutral(4),
-    surfaceContainerLow: neutral(10),
-    surfaceContainer: neutral(12),
-    surfaceContainerHigh: neutral(17),
-    surfaceContainerHighest: neutral(22),
+    surfaceContainerLowest: neutral(isDark ? 4 : 98),
+    surfaceContainerLow: neutral(isDark ? 10 : 96),
+    surfaceContainer: neutral(isDark ? 12 : 94),
+    surfaceContainerHigh: neutral(isDark ? 17 : 92),
+    surfaceContainerHighest: neutral(isDark ? 22 : 90),
   };
 };
 

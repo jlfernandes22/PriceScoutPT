@@ -178,14 +178,15 @@ const MORPH_SHAPES = [
 ];
 
 const MorphShape = ({ d, index, count, progress, color }) => {
-  const style = useAnimatedStyle(() => {
+  // useAnimatedProps é o padrão suportado para SVG no Reanimated (styles
+  // animados não são aplicados de forma fiável aos elementos react-native-svg).
+  const animatedProps = useAnimatedProps(() => {
     const cycle = progress.value * count;
     const distance = Math.min(Math.abs(cycle - index), count - Math.abs(cycle - index));
     const opacity = Math.max(0, 1 - distance);
-    const scale = 0.8 + 0.2 * opacity;
-    return { opacity, transform: [{ scale }] };
+    return { opacity };
   });
-  return <AnimatedPath d={d} fill={color} style={style} />;
+  return <AnimatedPath d={d} fill={color} animatedProps={animatedProps} />;
 };
 
 export const M3LoadingIndicator = ({ size = loadingTokens.loadingIndicator.size, overContent = false, style }) => {
