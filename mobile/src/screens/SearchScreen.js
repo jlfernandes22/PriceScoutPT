@@ -171,7 +171,7 @@ const ProductList = memo(function ProductList({
 });
 
 const PAGE_SIZE = 60;
-const MIN_SYNC_LOADING_MS = 1200;
+const MIN_SYNC_LOADING_MS = 1500;
 const MAX_LIST_RESULTS = 60000;
 
 const enhanceList = withObservables(

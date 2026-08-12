@@ -347,6 +347,7 @@ const MORPH_SHAPES = RAW_SHAPES.map((s) => normalizeShape(resample(withRoundedCo
 
 // Constrói o path SVG fechado com curvas suaves a partir dos pontos interpolados
 const buildMorphPath = (pts) => {
+  'worklet';
   let d = `M ${(pts[0][0] * 48).toFixed(2)} ${(pts[0][1] * 48).toFixed(2)}`;
   for (let i = 1; i < pts.length; i += 3) {
     const p1 = pts[i];

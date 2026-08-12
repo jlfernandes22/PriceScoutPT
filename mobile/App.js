@@ -21,7 +21,7 @@ import OnboardingScreen from './src/screens/OnboardingScreen';
 import ProductHistoryScreen from './src/screens/ProductHistoryScreen';
 
 const Stack = createNativeStackNavigator();
-const MIN_SYNC_LOADING_MS = 1200;
+const MIN_SYNC_LOADING_MS = 1500;
 
 export default function App() {
   return (
