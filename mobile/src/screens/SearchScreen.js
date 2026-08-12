@@ -140,8 +140,13 @@ const ProductList = memo(function ProductList({
         keyExtractor={(item, index) => item.id ? `${item.id}-${index}` : index.toString()}
         renderItem={renderItem}
         contentContainerStyle={styles.listContainer}
-        refreshing={refreshing}
+        refreshing={false}
         onRefresh={onRefresh}
+        // Spinner nativo invisível: o loading MD3 substitui a lista assim que
+        // o sync arranca — nunca aparece o indicador nativo do Android.
+        progressBackgroundColor="transparent"
+        colors={['transparent']}
+        tintColor="transparent"
         keyboardShouldPersistTaps="handled"
         onEndReached={onLoadMore}
         onEndReachedThreshold={0.5}
