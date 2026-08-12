@@ -1,6 +1,6 @@
 // Componentes de loading MD3 (§4.6): shimmer partilhado, wavy progress,
 // M3 LoadingIndicator (morph) — com fallback reduce-motion obrigatório.
-import React, { createContext, useContext, useEffect } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { useTheme } from 'react-native-paper';
 import Animated, {
@@ -118,21 +118,28 @@ export const WavyProgress = ({ height = loadingTokens.wavy.height, style }) => {
   const progress = useSharedValue(0);
   const colors = theme.colors;
 
-  useFrameCallback((frameInfo) => {
-    progress.value = (frameInfo.timeSinceFirstFrame / loadingTokens.wavy.cycleMs) % 1;
-  });
+  const [wavePhase, setWavePhase] = useState(0);
+  const reduceMotionRef2 = useRef(reduceMotion);
+  useEffect(() => {
+    if (reduceMotionRef2.current) return;
+    let raf = 0;
+    const startedAt = Date.now();
+    const tick = () => {
+      setWavePhase((Date.now() - startedAt) % loadingTokens.wavy.cycleMs);
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, []);
 
-  const animatedProps = useAnimatedProps(() => {
-    const phase = progress.value * 2 * Math.PI;
-    const shift = progress.value * 80;
-    let d = `M 0 ${height / 2}`;
-    for (let x = 0; x <= 320; x += 8) {
-      const y = (height / 2) + (height / 2) * 0.6 * Math.sin(phase + (x / 320) * 2 * Math.PI * 2);
-      d += ` L ${x} ${y}`;
-    }
-    d += ` L 320 ${height} L 0 ${height} Z`;
-    return { d, transform: [{ translateX: -shift }] };
-  });
+  const phase = (wavePhase / loadingTokens.wavy.cycleMs) * 2 * Math.PI;
+  const shift = (wavePhase / loadingTokens.wavy.cycleMs) * 80;
+  let waveD = `M 0 ${height / 2}`;
+  for (let x = 0; x <= 320; x += 8) {
+    const y = (height / 2) + (height / 2) * 0.6 * Math.sin(phase + (x / 320) * 2 * Math.PI * 2);
+    waveD += ` L ${x} ${y}`;
+  }
+  waveD += ` L 320 ${height} L 0 ${height} Z`;
 
   if (reduceMotion) {
     return (
@@ -150,7 +157,7 @@ export const WavyProgress = ({ height = loadingTokens.wavy.height, style }) => {
       accessibilityLabel="A carregar"
     >
       <Svg width={320} height={height}>
-        <AnimatedPath animatedProps={animatedProps} fill={colors.primary} opacity={0.85} />
+        <Path d={waveD} fill={colors.primary} opacity={0.85} transform={[{ translateX: -shift }]} />
       </Svg>
     </View>
   );
@@ -436,79 +443,57 @@ const buildMorphPath = (pts) => {
   return d + ' Z';
 };
 
+
+// Path do morph para uma fase 0..1 (cálculo na thread JS — re-render garantido)
+const morphPathForPhase = (phase) => {
+  const cycle = phase * MORPH_SHAPES.length;
+  const idx = Math.floor(cycle) % MORPH_SHAPES.length;
+  const frac = cycle - Math.floor(cycle);
+  const a = MORPH_SHAPES[idx];
+  const b = MORPH_SHAPES[(idx + 1) % MORPH_SHAPES.length];
+  const pts = new Array(MORPH_SAMPLES);
+  for (let i = 0; i < MORPH_SAMPLES; i++) {
+    pts[i] = [a[i][0] + (b[i][0] - a[i][0]) * frac, a[i][1] + (b[i][1] - a[i][1]) * frac];
+  }
+  return buildMorphPath(pts);
+};
+
 export const M3LoadingIndicator = ({ size = loadingTokens.loadingIndicator.size, overContent = false, style }) => {
   const theme = useTheme();
   const reduceMotion = useReduceMotion();
   const colors = theme.colors;
-  const progress = useSharedValue(0);
-  const count = MORPH_SHAPES.length;
-
-  useFrameCallback((frameInfo) => {
-    progress.value = (frameInfo.timeSinceFirstFrame / loadingTokens.loadingIndicator.cycleMs) % 1;
-  });
-
-  // Morph real: interpola os vértices entre a forma ativa e a seguinte.
-  // TUDO inline no worklet — sem chamadas a funções externas (as chamadas a
-  // funções module-level dentro de worklets falham neste stack: "Object is not
-  // a function"). MORPH_SHAPES entra como dado capturado (constante).
-  const pathProps = useAnimatedProps(() => {
-    const cycle = progress.value * count;
-    const idx = Math.floor(cycle) % count;
-    const frac = cycle - Math.floor(cycle);
-    const a = MORPH_SHAPES[idx];
-    const b = MORPH_SHAPES[(idx + 1) % count];
-    let d =
-      'M ' +
-      ((a[0][0] + (b[0][0] - a[0][0]) * frac) * 48).toFixed(2) +
-      ' ' +
-      ((a[0][1] + (b[0][1] - a[0][1]) * frac) * 48).toFixed(2);
-    for (let i = 1; i < MORPH_SAMPLES; i += 3) {
-      const i1 = i;
-      const i2 = (i + 1) % MORPH_SAMPLES;
-      const i3 = (i + 2) % MORPH_SAMPLES;
-      const x1 = (a[i1][0] + (b[i1][0] - a[i1][0]) * frac) * 48;
-      const y1 = (a[i1][1] + (b[i1][1] - a[i1][1]) * frac) * 48;
-      const x2 = (a[i2][0] + (b[i2][0] - a[i2][0]) * frac) * 48;
-      const y2 = (a[i2][1] + (b[i2][1] - a[i2][1]) * frac) * 48;
-      const x3 = (a[i3][0] + (b[i3][0] - a[i3][0]) * frac) * 48;
-      const y3 = (a[i3][1] + (b[i3][1] - a[i3][1]) * frac) * 48;
-      d +=
-        ' C ' + x1.toFixed(2) + ' ' + y1.toFixed(2) + ', ' + x2.toFixed(2) + ' ' +
-        y2.toFixed(2) + ', ' + x3.toFixed(2) + ' ' + y3.toFixed(2);
-    }
-    return { d: d + ' Z' };
-  });
-
-  // Rotação oficial: -progress × 180° (sentido anti-horário)
-  const rotation = useSharedValue(0);
-  useFrameCallback((frameInfo) => {
-    rotation.value = (frameInfo.timeSinceFirstFrame / loadingTokens.loadingIndicator.cycleMs) % 1;
-  });
-
-  const containerStyle = useAnimatedStyle(() => ({
-    transform: [{ rotate: `${-rotation.value * 180}deg` }],
-  }));
-
   const activeColor = overContent ? colors.onPrimaryContainer : colors.primary;
   const viewBox = `0 0 48 48`;
 
-  if (reduceMotion) {
-    return (
-      <View style={[styles.indicatorContainer, { width: size, height: size }, style]} accessibilityRole="progressbar" accessibilityLabel="A carregar">
-        <Svg width={size} height={size} viewBox={viewBox}>
-          <Path d={buildMorphPath(MORPH_SHAPES[0])} fill={activeColor} />
-        </Svg>
-      </View>
-    );
-  }
+  // Animação por estado React + requestAnimationFrame (thread JS).
+  // Garante o re-render em qualquer dispositivo — os animated props do SVG
+  // (worklet/UI-thread) não atualizam o `d` do path neste stack.
+  const [phase, setPhase] = useState(0);
+
+  const reduceMotionRef = useRef(reduceMotion);
+  useEffect(() => {
+    if (reduceMotionRef.current) return;
+    let raf = 0;
+    const startedAt = Date.now();
+    const tick = () => {
+      const elapsed = Date.now() - startedAt;
+      setPhase((elapsed % loadingTokens.loadingIndicator.cycleMs) / loadingTokens.loadingIndicator.cycleMs);
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
+  const d = useMemo(() => morphPathForPhase(phase), [phase]);
+  const rotationDeg = -phase * 180;
 
   return (
     <View style={[styles.indicatorContainer, { width: size, height: size }, style]} accessibilityRole="progressbar" accessibilityLabel="A carregar">
-      <Animated.View style={containerStyle}>
+      <View style={{ transform: [{ rotate: `${rotationDeg}deg` }] }}>
         <Svg width={size} height={size} viewBox={viewBox}>
-          <AnimatedPath animatedProps={pathProps} fill={activeColor} />
+          <Path d={d} fill={activeColor} />
         </Svg>
-      </Animated.View>
+      </View>
     </View>
   );
 };
