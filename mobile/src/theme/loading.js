@@ -285,7 +285,7 @@ const RAW_SHAPES = [
   ),
 ];
 
-const MORPH_SAMPLES = 36; // pontos comuns para interpolação (Morph resampling)
+const MORPH_SAMPLES = 24; // pontos comuns para interpolação (Morph resampling)
 
 // Cantos arredondados — geometria exata do AOSP (RoundedCorner.kt):
 // cut = radius * cot(θ/2) ao longo de cada aresta; arco de raio `radius` entre
@@ -457,21 +457,16 @@ export const M3LoadingIndicator = ({ size = loadingTokens.loadingIndicator.size,
   // Morph real: interpola os vértices entre a forma ativa e a seguinte
   const pathProps = useAnimatedProps(() => {
     'worklet';
-    try {
-      const cycle = progress.value * count;
-      const idx = Math.floor(cycle) % count;
-      const frac = cycle - Math.floor(cycle);
-      const a = MORPH_SHAPES[idx];
-      const b = MORPH_SHAPES[(idx + 1) % count];
-      const pts = new Array(MORPH_SAMPLES);
-      for (let i = 0; i < MORPH_SAMPLES; i++) {
-        pts[i] = [a[i][0] + (b[i][0] - a[i][0]) * frac, a[i][1] + (b[i][1] - a[i][1]) * frac];
-      }
-      return { d: buildMorphPath(pts) };
-    } catch (e) {
-      console.log('[morph-worklet-err]', e && e.message ? e.message : String(e));
-      return { d: 'M24 8 L40 24 L24 40 L8 24 Z' };
+    const cycle = progress.value * count;
+    const idx = Math.floor(cycle) % count;
+    const frac = cycle - Math.floor(cycle);
+    const a = MORPH_SHAPES[idx];
+    const b = MORPH_SHAPES[(idx + 1) % count];
+    const pts = new Array(MORPH_SAMPLES);
+    for (let i = 0; i < MORPH_SAMPLES; i++) {
+      pts[i] = [a[i][0] + (b[i][0] - a[i][0]) * frac, a[i][1] + (b[i][1] - a[i][1]) * frac];
     }
+    return { d: buildMorphPath(pts) };
   });
 
   // Rotação oficial: -progress × 180° (sentido anti-horário)
