@@ -474,7 +474,7 @@ export const M3LoadingIndicator = ({ size = loadingTokens.loadingIndicator.size,
   // Animação por estado React + requestAnimationFrame (thread JS).
   // Garante o re-render em qualquer dispositivo — os animated props do SVG
   // (worklet/UI-thread) não atualizam o `d` do path neste stack.
-  const [morph, setMorph] = useState({ idx: 0, frac: 0, rot: 0 });
+  const [morph, setMorph] = useState({ idx: 0, frac: 0, scale: 1, rot: 0 });
 
   const reduceMotionRef = useRef(reduceMotion);
   useEffect(() => {
@@ -486,9 +486,14 @@ export const M3LoadingIndicator = ({ size = loadingTokens.loadingIndicator.size,
       const idx = Math.floor(elapsed / MORPH_INTERVAL_MS) % MORPH_SHAPES.length;
       const tIn = elapsed % MORPH_INTERVAL_MS;
       const tt = Math.min(1, tIn / SPRING_DURATION_MS);
-      const frac = springResponse(tt * (SPRING_DURATION_MS / 1000));
-      const rot = -((elapsed % ROTATION_CYCLE_MS) / ROTATION_CYCLE_MS) * 360;
-      setMorph({ idx, frac, rot });
+      const spring = springResponse(tt * (SPRING_DURATION_MS / 1000));
+      // AOSP: progresso do morph é COERIDO (sem overshoot na geometria);
+      // o "saltinho" é simulado na escala do desenho.
+      const frac = Math.max(0, Math.min(1, spring));
+      const scale = 1 + Math.max(0, spring - 1);
+      // Rotação horária: progresso do morph × 90° + 90° por passo + contínua (360°/4666ms)
+      const rot = frac * 90 + ((idx + 1) % 4) * 90 + ((elapsed % ROTATION_CYCLE_MS) / ROTATION_CYCLE_MS) * 360;
+      setMorph({ idx, frac, scale, rot });
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
@@ -499,10 +504,11 @@ export const M3LoadingIndicator = ({ size = loadingTokens.loadingIndicator.size,
   const b = MORPH_SHAPES[(morph.idx + 1) % MORPH_SHAPES.length];
   const d = useMemo(() => morphPathForPair(a, b, morph.frac), [morph.idx, morph.frac]);
   const rotationDeg = morph.rot;
+  const bounceScale = morph.scale;
 
   return (
     <View style={[styles.indicatorContainer, { width: size, height: size }, style]} accessibilityRole="progressbar" accessibilityLabel="A carregar">
-      <View style={{ transform: [{ rotate: `${rotationDeg}deg` }] }}>
+      <View style={{ transform: [{ rotate: `${rotationDeg}deg` }, { scale: bounceScale }] }}>
         <Svg width={size} height={size} viewBox={viewBox}>
           <Path d={d} fill={activeColor} />
         </Svg>
