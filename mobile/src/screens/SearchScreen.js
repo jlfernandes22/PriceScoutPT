@@ -613,11 +613,7 @@ const createStyles = (colors) => StyleSheet.create({
   filterChip: {
     marginRight: 6,
     borderRadius: 18,
-    minHeight: 38,
-    height: undefined,
-    paddingVertical: 6,
     paddingHorizontal: 12,
-    justifyContent: 'center',
   },
   listContainer: {
     paddingHorizontal: 16,
