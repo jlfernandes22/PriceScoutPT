@@ -1,18 +1,17 @@
 import Constants from 'expo-constants';
-import { Platform } from 'react-native';
+
+// Servidor de produção da aplicação (partilhado por todos os utilizadores).
+const PRODUCTION_API_BASE_URL = 'https://pricescoutpt-api.yellowflower-63c75e19.northeurope.azurecontainerapps.io';
 
 const getApiBaseUrl = () => {
-  const productionUrl = Constants.expoConfig?.extra?.apiBaseUrl;
-  
-  if (productionUrl && productionUrl.trim() !== '') {
-    return productionUrl;
+  // Override de build (expo extra.apiBaseUrl) — usado por exemplo em
+  // desenvolvimento local. Sem override, todos os builds usam o servidor
+  // de produção da aplicação.
+  const buildUrl = Constants.expoConfig?.extra?.apiBaseUrl;
+  if (buildUrl && buildUrl.trim() !== '') {
+    return buildUrl.trim();
   }
-  
-  // Fallback de desenvolvimento local
-  return Platform.select({
-    android: 'http://10.0.2.2:3000',
-    default: 'http://localhost:3000',
-  });
+  return PRODUCTION_API_BASE_URL;
 };
 
 export const API_BASE_URL = getApiBaseUrl();
