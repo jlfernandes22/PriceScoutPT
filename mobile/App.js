@@ -1,10 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { StatusBar, View, StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Provider as PaperProvider, BottomNavigation, ActivityIndicator, Text, Icon } from 'react-native-paper';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { database } from './src/model';
 import { syncDatabase } from './src/services/sync';
+import { loadApiBaseUrl } from './src/config';
 import { paperTheme, colors, spacing } from './src/theme';
 
 import SearchScreen from './src/screens/SearchScreen';
@@ -23,6 +24,7 @@ function AppContent() {
   const [isLoading, setIsLoading] = useState(true);
   const [hasOnboarded, setHasOnboarded] = useState(false);
   const [syncProgress, setSyncProgress] = useState(null);
+  const [isResetting, setIsResetting] = useState(false);
 
   const [index, setIndex] = useState(0);
   const [routes] = useState([
@@ -32,7 +34,14 @@ function AppContent() {
     { key: 'basket', title: 'Meu Cabaz', focusedIcon: 'cart', unfocusedIcon: 'cart-outline' },
   ]);
 
+  // Single-flight para a sync: dois toques rápidos em "Começar a Poupar"/
+  // "Saltar" (ou pull-to-refresh durante o arranque) não podem lançar duas
+  // sincronizações completas concorrentes — duplicava o download do catálogo.
+  const syncInFlightRef = useRef(false);
+
   const runSync = async (background = false) => {
+    if (syncInFlightRef.current) return;
+    syncInFlightRef.current = true;
     if (!background) {
       setIsLoading(true);
     }
@@ -42,13 +51,41 @@ function AppContent() {
     } catch (error) {
       console.error('[App] Erro na sincronização:', error);
     } finally {
+      syncInFlightRef.current = false;
       setIsLoading(false);
     }
   };
 
+  // Reposição da base de dados vivendo AQUI (não no SettingsModal) porque o
+  // unsafeResetDatabase() falha/corrompe dados se houver subscritores ativos
+  // ("Unexpected N Database subscribers were detected..."). Desmontar os
+  // separadores (isResetting) liberta os observers do withObservables antes
+  // do reset — sem isto, a reposição deixava registos órfãos e a sync seguinte
+  // duplicava categorias/produtos (ids antigos + novos a coexistir).
+  const handleResetDatabase = useCallback(async () => {
+    if (isResetting) return;
+    setIsResetting(true);
+    // Um tick para o React desmontar os ecrãs e libertar as subscrições.
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    try {
+      await database.write(async () => {
+        await database.unsafeResetDatabase();
+      });
+      await syncDatabase(database, { onProgress: setSyncProgress });
+    } catch (error) {
+      console.error('[App] Erro na reposição da base de dados:', error);
+    } finally {
+      setIsResetting(false);
+      setIsLoading(false);
+    }
+  }, [isResetting]);
+
   useEffect(() => {
     const initializeApp = async () => {
       try {
+        // Carregar o servidor escolhido pelo utilizador (self-hosted) ANTES de
+        // qualquer pedido de rede (sync/histórico/status).
+        await loadApiBaseUrl();
         const completed = await AsyncStorage.getItem('@onboarding_completed');
         if (completed === 'true') {
           // Utilizador recorrente. Se já existe catálogo local, mostra a app
@@ -79,7 +116,7 @@ function AppContent() {
   const renderScene = ({ route, jumpTo }) => {
     switch (route.key) {
       case 'search':
-        return SearchScreen ? <SearchScreen jumpTo={jumpTo} /> : <View />;
+        return SearchScreen ? <SearchScreen jumpTo={jumpTo} onResetDatabase={handleResetDatabase} /> : <View />;
       case 'favorites':
         return FavoritesScreen ? <FavoritesScreen jumpTo={jumpTo} /> : <View />;
       case 'compare':
@@ -91,7 +128,7 @@ function AppContent() {
     }
   };
 
-  if (isLoading) {
+  if (isLoading || isResetting) {
     return (
       <SafeAreaProvider>
         <PaperProvider theme={paperTheme}>
@@ -102,13 +139,15 @@ function AppContent() {
             </View>
             <Text variant="titleLarge" style={styles.loaderTitle}>PriceScoutPT</Text>
             <Text variant="bodyMedium" style={styles.loaderSubtitle}>
-              Compara preços dos supermercados portugueses
+              {isResetting ? 'A repor a base de dados local…' : 'Compara preços dos supermercados portugueses'}
             </Text>
             <ActivityIndicator size="large" color={colors.primary} style={styles.loaderSpinner} />
             <Text variant="bodySmall" style={styles.loaderStatus}>
               {syncProgress && syncProgress.total > 0
                 ? `A descarregar o catálogo… ${syncProgress.done} de ${syncProgress.total} registos`
-                : 'A preparar o catálogo…'}
+                : syncProgress && syncProgress.done > 0
+                  ? `A descarregar o catálogo… ${syncProgress.done} registos recebidos`
+                  : 'A preparar o catálogo…'}
             </Text>
           </View>
         </PaperProvider>

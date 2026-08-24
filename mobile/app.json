@@ -28,7 +28,7 @@
     "extra": {
       "apiBaseUrl": "",
       "scrapeSecret": "",
-      "note": "Valores reais de apiBaseUrl/scrapeSecret vivem em app.config.local.json (ignorado pelo git). Deixar vazio assume o fallback de desenvolvimento local."
+      "note": "Valores reais de apiBaseUrl/scrapeSecret vivem em app.config.local.json (ignorado pelo git). Deixar vazio usa o servidor de produção partilhado (DEFAULT_API_BASE_URL em src/config.js), substituível em runtime em Definições -> Servidor."
     },
     "buildProperties": {
       "android": {

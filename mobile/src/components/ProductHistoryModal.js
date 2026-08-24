@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { View, StyleSheet, ScrollView, Dimensions } from 'react-native';
+import { View, StyleSheet, ScrollView, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Portal, Modal, Surface, Text, IconButton, Icon, Divider, Card, Badge, ActivityIndicator } from 'react-native-paper';
+import { Portal, Modal, Surface, Text, IconButton, Icon, Divider, Badge, ActivityIndicator } from 'react-native-paper';
 import { LineChart } from 'react-native-chart-kit';
 import axios from 'axios';
 import { useLocalFuzzyMatch } from '../utils/fuzzyMatch';
 import { computeUnitPrice } from '../utils/unitPrice';
-import { API_BASE_URL } from '../config';
+import { getApiBaseUrl } from '../config';
 import { SUPERMARKET_BRANDS, getSupermarket, ProductImage } from './ProductCard';
-import { colors } from '../theme';
+import { colors, rgba } from '../theme';
 
 const formatDate = (dateStr) => {
   const d = new Date(dateStr);
@@ -23,6 +23,10 @@ const ProductHistoryModal = ({ product, visible, onDismiss, isFavorite, onToggle
   // Hook reativo para preços cruzados offline
   const { matches: crossPrices, loading: crossLoading } = useLocalFuzzyMatch(product);
 
+  // Largura da janela reativa (rotação/split-screen) — Dimensions.get() capturado
+  // no render ficava congelado ao valor do primeiro render.
+  const { width: windowWidth } = useWindowDimensions();
+
   useEffect(() => {
     let isMounted = true;
     
@@ -32,7 +36,7 @@ const ProductHistoryModal = ({ product, visible, onDismiss, isFavorite, onToggle
         setNetworkError(false);
         try {
           // Chamada permitida à API local
-          const response = await axios.get(`${API_BASE_URL}/api/products/${product.id}`, { timeout: 8000 });
+          const response = await axios.get(`${getApiBaseUrl()}/api/products/${product.id}`, { timeout: 8000 });
           if (isMounted && response.data && response.data.price_history) {
             setHistory(response.data.price_history);
           }
@@ -114,7 +118,7 @@ const ProductHistoryModal = ({ product, visible, onDismiss, isFavorite, onToggle
       datasets: [
         {
           data: prices,
-          color: (opacity = 1) => `rgba(0, 80, 170, ${opacity})`,
+          color: (opacity = 1) => rgba(colors.primary, opacity),
           strokeWidth: 3,
         }
       ]
@@ -174,7 +178,9 @@ const ProductHistoryModal = ({ product, visible, onDismiss, isFavorite, onToggle
             {/* 0.5 Peso / Volume e Preço por Unidade */}
             {unitText && (
               <Surface style={styles.unitCard} elevation={1}>
-                <Icon icon="scale-balance" size={22} color={brandInfo.color} />
+                {/* Icon (Paper v5) usa `source`, não `icon` — com a prop errada
+                    o ícone devolvia null e não renderizava nada. */}
+                <Icon source="scale-balance" size={22} color={brandInfo.color} />
                 <View style={styles.unitColLeft}>
                   <Text variant="bodySmall" style={styles.unitLabel}>Peso / Volume</Text>
                   <Text variant="titleSmall" style={styles.unitValue}>{unitText}</Text>
@@ -233,14 +239,14 @@ const ProductHistoryModal = ({ product, visible, onDismiss, isFavorite, onToggle
               >
                 <LineChart
                   data={chartData}
-                  width={Dimensions.get('window').width - 32}
+                  width={Math.max(windowWidth - 32, 0)}
                   height={180}
                   chartConfig={{
-                    backgroundColor: '#ffffff',
-                    backgroundGradientFrom: '#ffffff',
-                    backgroundGradientTo: '#ffffff',
+                    backgroundColor: colors.surface,
+                    backgroundGradientFrom: colors.surface,
+                    backgroundGradientTo: colors.surface,
                     decimalPlaces: 2,
-                    color: (opacity = 1) => `rgba(0, 80, 170, ${opacity})`,
+                    color: (opacity = 1) => rgba(colors.primary, opacity),
                     labelColor: (opacity = 1) => `rgba(100, 100, 100, ${opacity})`,
                     propsForDots: {
                       r: "4",

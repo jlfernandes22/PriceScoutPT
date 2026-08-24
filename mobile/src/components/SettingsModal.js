@@ -1,11 +1,17 @@
 import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, Modal as RNModal, ScrollView } from 'react-native';
-import { Portal, Modal, Dialog, Surface, Text, IconButton, Divider, Button, ActivityIndicator, Snackbar } from 'react-native-paper';
+import { Portal, Modal, Dialog, Surface, Text, IconButton, Divider, Button, ActivityIndicator, Snackbar, TextInput } from 'react-native-paper';
 import axios from 'axios';
 import Constants from 'expo-constants';
 import { database } from '../model';
 import { colors } from '../theme';
-import { API_BASE_URL } from '../config';
+import {
+  getApiBaseUrl,
+  setApiBaseUrl,
+  loadApiBaseUrl,
+  isCustomApiBaseUrl,
+  DEFAULT_API_BASE_URL,
+} from '../config';
 import { syncDatabase } from '../services/sync';
 
 const formatLastScrape = (iso) => {
@@ -17,7 +23,7 @@ const formatLastScrape = (iso) => {
 
 const appVersion = Constants.expoConfig?.version || '1.0.0';
 
-const SettingsModal = ({ visible, onDismiss }) => {
+const SettingsModal = ({ visible, onDismiss, onResetDatabase }) => {
   const [loading, setLoading] = useState(false);
   const [loadingText, setLoadingText] = useState('');
   const [syncingNow, setSyncingNow] = useState(false);
@@ -26,6 +32,38 @@ const SettingsModal = ({ visible, onDismiss }) => {
   const [resetDialogVisible, setResetDialogVisible] = useState(false);
   const [clearDialogVisible, setClearDialogVisible] = useState(false);
 
+  // Servidor self-hosted: URL atual + valor a editar + diálogo de edição.
+  const [serverUrl, setServerUrl] = useState(getApiBaseUrl());
+  const [serverDialogVisible, setServerDialogVisible] = useState(false);
+  const [serverInput, setServerInput] = useState('');
+  const [savingServer, setSavingServer] = useState(false);
+
+  // Carrega o servidor escolhido pelo utilizador (persistido) ao abrir o painel.
+  useEffect(() => {
+    if (!visible) return;
+    loadApiBaseUrl().then((url) => setServerUrl(url)).catch(() => {});
+  }, [visible]);
+
+  const handleSaveServer = async () => {
+    if (savingServer) return;
+    setSavingServer(true);
+    try {
+      const url = await setApiBaseUrl(serverInput);
+      setServerUrl(url);
+      setServerDialogVisible(false);
+      setSyncMsg(
+        isCustomApiBaseUrl()
+          ? 'Servidor atualizado. Toque em "Sincronizar Agora" para descarregar o catálogo do novo servidor.'
+          : 'Servidor predefinido reposto. Toque em "Sincronizar Agora" para atualizar o catálogo.'
+      );
+    } catch (e) {
+      console.error('[Settings Server Error]:', e);
+      setSyncMsg('Não foi possível guardar o servidor.');
+    } finally {
+      setSavingServer(false);
+    }
+  };
+
   // A recolha diária corre no servidor (agendada às ~13:00). O botão só
   // descarrega os dados mais recentes; a hora da última recolha lê-se uma vez
   // ao abrir o painel (sem polling contínuo).
@@ -33,7 +71,7 @@ const SettingsModal = ({ visible, onDismiss }) => {
     if (!visible) return;
     let cancelled = false;
     axios
-      .get(`${API_BASE_URL}/api/scrape/status`, { timeout: 10000 })
+      .get(`${getApiBaseUrl()}/api/scrape/status`, { timeout: 10000 })
       .then((res) => {
         if (!cancelled) setLastScrapeAt(res.data.last_scrape_at || null);
       })
@@ -61,21 +99,14 @@ const SettingsModal = ({ visible, onDismiss }) => {
 
   const handleResetDatabase = () => setResetDialogVisible(true);
 
-  const executeResetDatabase = async () => {
+  // O reset em si vive no App (handleResetDatabase): o unsafeResetDatabase
+  // exige que NÃO haja subscritores ativos do WatermelonDB — o App desmonta
+  // os separadores antes de repor. Chamá-lo aqui dentro deixava os observers
+  // dos ecrãs montados e corrompia a base de dados (registos duplicados).
+  const executeResetDatabase = () => {
     setResetDialogVisible(false);
-    setLoadingText('A apagar base de dados local...');
-    setLoading(true);
-    try {
-      await database.write(async () => {
-        await database.unsafeResetDatabase();
-      });
-      setLoadingText('A descarregar catálogo do servidor...');
-      await syncDatabase(database);
-    } catch (e) {
-      console.error("[Settings Reset Database Error]:", e);
-    } finally {
-      setLoading(false);
-      onDismiss();
+    if (onResetDatabase) {
+      onResetDatabase();
     }
   };
 
@@ -142,6 +173,51 @@ const SettingsModal = ({ visible, onDismiss }) => {
                 {formatLastScrape(lastScrapeAt)}
               </Text>
             </Surface>
+
+            <Divider style={styles.divider} />
+
+            {/* Secção: Servidor (self-hosted) */}
+            <Text variant="titleSmall" style={styles.sectionLabel}>Servidor</Text>
+            <Text variant="bodySmall" style={styles.helpText}>
+              A app usa por omissão o servidor partilhado do PriceScoutPT, mas podes apontá-la
+              para o teu próprio backend (self-hosted) — a API é open-source e corre em qualquer
+              servidor com Docker.
+            </Text>
+            <Surface style={styles.serverCard} elevation={1}>
+              <Text variant="bodySmall" style={styles.lastScrapeLabel}>
+                {isCustomApiBaseUrl() ? 'Servidor personalizado' : 'Servidor predefinido'}
+              </Text>
+              <Text variant="bodySmall" style={styles.serverUrl} numberOfLines={2} ellipsizeMode="middle">
+                {serverUrl}
+              </Text>
+            </Surface>
+            <Button
+              mode="outlined"
+              icon="server-network"
+              textColor={colors.primary}
+              style={[styles.actionButton, { borderColor: colors.primary }]}
+              contentStyle={styles.buttonContent}
+              onPress={() => {
+                setServerInput(isCustomApiBaseUrl() ? serverUrl : '');
+                setServerDialogVisible(true);
+              }}
+            >
+              Alterar Servidor
+            </Button>
+            {isCustomApiBaseUrl() && (
+              <Button
+                mode="text"
+                icon="restore"
+                textColor={colors.textMuted}
+                onPress={async () => {
+                  const url = await setApiBaseUrl('');
+                  setServerUrl(url);
+                  setSyncMsg('Servidor predefinido reposto. Toque em "Sincronizar Agora" para atualizar o catálogo.');
+                }}
+              >
+                Repor Servidor Predefinido
+              </Button>
+            )}
 
             <Divider style={styles.divider} />
 
@@ -237,6 +313,45 @@ const SettingsModal = ({ visible, onDismiss }) => {
           <Button textColor={colors.danger} onPress={executeClearFavorites}>Limpar Todos</Button>
         </Dialog.Actions>
       </Dialog>
+
+      <Dialog
+        visible={serverDialogVisible}
+        onDismiss={() => setServerDialogVisible(false)}
+        style={{ backgroundColor: colors.surface }}
+      >
+        <Dialog.Title>Alterar Servidor</Dialog.Title>
+        <Dialog.Content>
+          <Text variant="bodySmall" style={styles.helpText}>
+            URL base da API (self-hosted). Ex: https://meu-servidor.example — deixa vazio para
+            repor o servidor predefinido do PriceScoutPT.
+          </Text>
+          <TextInput
+            label="URL do servidor"
+            value={serverInput}
+            onChangeText={setServerInput}
+            placeholder="https://meu-servidor.example"
+            mode="outlined"
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="url"
+            outlineColor={colors.borderStrong}
+            activeOutlineColor={colors.primary}
+          />
+        </Dialog.Content>
+        <Dialog.Actions>
+          <Button textColor={colors.textMuted} onPress={() => setServerDialogVisible(false)}>Cancelar</Button>
+          <Button
+            mode="contained"
+            buttonColor={colors.primary}
+            textColor={colors.surface}
+            loading={savingServer}
+            disabled={savingServer}
+            onPress={handleSaveServer}
+          >
+            Guardar
+          </Button>
+        </Dialog.Actions>
+      </Dialog>
     </Portal>
   );
 };
@@ -311,6 +426,17 @@ const styles = StyleSheet.create({
   lastScrapeValue: {
     color: colors.textSecondary,
     fontWeight: '600',
+    marginTop: 2,
+  },
+  serverCard: {
+    backgroundColor: colors.surfaceVariant,
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 10,
+  },
+  serverUrl: {
+    color: colors.textSecondary,
+    fontFamily: 'monospace',
     marginTop: 2,
   },
   divider: {

@@ -4,7 +4,7 @@ import {
   setLastPulledAt,
   applyRemoteChanges,
 } from '@nozbe/watermelondb/sync/impl';
-import { API_BASE_URL } from '../config';
+import { getApiBaseUrl } from '../config';
 
 const BATCH_SIZE = 5000;
 
@@ -26,7 +26,9 @@ export async function syncDatabase(database, options = {}) {
   console.log('[Sync] A iniciar protocolo de sincronização Offline-First (lote a lote)...');
 
   const lastPulledAt = (await getLastPulledAt(database)) || 0;
-  const lastPulledAtParam = lastPulledAt
+  // let: no reinício por delta truncado (>10k linhas) este valor é reposto
+  // para o epoch — 'const' lançava TypeError e abortava a sincronização.
+  let lastPulledAtParam = lastPulledAt
     ? new Date(lastPulledAt).toISOString()
     : new Date(0).toISOString();
 
@@ -48,7 +50,7 @@ export async function syncDatabase(database, options = {}) {
       params.cursor = cursor;
     }
 
-    const response = await axios.get(`${API_BASE_URL}/api/sync`, {
+    const response = await axios.get(`${getApiBaseUrl()}/api/sync`, {
       params,
       // Timeout generoso para tolerar o arranque a frio do free tier
       // (scale-to-zero) sem deixar o ecrã de carregamento pendurado para sempre.
