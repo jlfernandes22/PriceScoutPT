@@ -85,8 +85,16 @@ router.get('/', async (req, res) => {
   }
 });
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 router.get('/:id', async (req, res) => {
   const { id } = req.params;
+
+  // Um id não-UUID (ex: "/api/products/foo") faria o PostgreSQL lançar o erro
+  // 22P02 (invalid input syntax for type uuid) — melhor responder 404 direto.
+  if (!UUID_RE.test(id)) {
+    return res.status(404).json({ error: 'Product not found.' });
+  }
 
   try {
     const productResult = await db.query(

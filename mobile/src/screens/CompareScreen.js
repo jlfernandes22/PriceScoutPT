@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { View, StyleSheet, ScrollView, SectionList, Share, Image, Pressable } from 'react-native';
+import { View, StyleSheet, ScrollView, SectionList, Share, Image, Pressable, Keyboard } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Text, IconButton, Button, Chip, Surface, Divider, Badge, ActivityIndicator, Card } from 'react-native-paper';
@@ -8,7 +8,7 @@ import withObservables from '@nozbe/with-observables';
 import { database } from '../model';
 import { findLocalFuzzyMatch } from '../utils/fuzzyMatch';
 import ProductHistoryModal from '../components/ProductHistoryModal';
-import { SUPERMARKET_BRANDS, getSupermarket, formatPrice } from '../components/ProductCard';
+import { SUPERMARKET_BRANDS, getSupermarket } from '../components/ProductCard';
 import { colors } from '../theme';
 
 const DISCLAIMER_KEY = '@compare_disclaimer_seen';
@@ -51,14 +51,21 @@ const ComparisonDetails = ({ shoppingList, items, favoriteIds, onToggleFavorite 
       setLoading(true);
       try {
         // Fetch de todos os produtos alvo em paralelo (I/O async independente).
-        const products = await Promise.all(
-          items.map((item) => item.product.fetch())
+        // Um produto referenciado pela lista pode ter sido apagado pela sync —
+        // Relation.fetch() rejeita com NotFoundError, e um único caso desses
+        // não pode rebentar a comparação inteira (só se ignora esse item).
+        const resolved = await Promise.all(
+          items.map(async (item) => {
+            try {
+              return { item, product: await item.product.fetch() };
+            } catch (e) {
+              return { item, product: null };
+            }
+          })
         );
-        const resolvedItems = [];
 
-        for (let i = 0; i < items.length; i++) {
-          const item = items[i];
-          const product = products[i];
+        const resolvedItems = [];
+        for (const { item, product } of resolved) {
           if (!product) continue;
 
           // Lookups por supermercado em paralelo (antes eram sequenciais).
@@ -177,7 +184,17 @@ const ComparisonDetails = ({ shoppingList, items, favoriteIds, onToggleFavorite 
       }
     }
 
-    return { totals: calculatedTotals, cheapestId: bestId };
+    // O mais barato aparece primeiro nos cartões — sem isto, o vencedor ficava
+    // fora do ecrã (a fila é horizontal) e o utilizador tinha de fazer scroll
+    // para descobrir onde o cabaz é mais barato.
+    const ordered = bestId
+      ? [
+          ...calculatedTotals.filter((t) => t.supermarketId === bestId),
+          ...calculatedTotals.filter((t) => t.supermarketId !== bestId),
+        ]
+      : calculatedTotals;
+
+    return { totals: ordered, cheapestId: bestId };
   }, [comparisonData]);
 
   const sections = useMemo(() => {
@@ -210,6 +227,7 @@ const ComparisonDetails = ({ shoppingList, items, favoriteIds, onToggleFavorite 
 
   const openHistory = async (item) => {
     if (!item.available || !item.productId) return;
+    Keyboard.dismiss();
     try {
       const prod = await database.collections.get('products').find(item.productId);
       if (prod) {
@@ -219,9 +237,7 @@ const ComparisonDetails = ({ shoppingList, items, favoriteIds, onToggleFavorite 
     } catch (e) {
       console.error("[CompareScreen fetch product for history error]:", e);
     }
-  };
-
-  const handleShareBasket = async () => {
+  };  const handleShareBasket = async () => {
     if (!comparisonData || comparisonData.length === 0) {
       alert("Adiciona produtos ao cabaz antes de partilhar.");
       return;
@@ -347,7 +363,7 @@ const ComparisonDetails = ({ shoppingList, items, favoriteIds, onToggleFavorite 
                   </Text>
                   {t.unavailableCount > 0 ? (
                     <Badge style={styles.unavailableBadge}>
-                      {t.unavailableCount} item(ns) indisponível
+                      {t.unavailableCount} em falta
                     </Badge>
                   ) : (
                     <Badge style={[styles.unavailableBadge, { backgroundColor: colors.successContainer, color: colors.textSecondary }]}>
@@ -409,7 +425,12 @@ const ComparisonDetails = ({ shoppingList, items, favoriteIds, onToggleFavorite 
                     style={styles.infoIcon}
                     accessibilityLabel={`Histórico de preços de ${item.originalName}`}
                     hitSlop={8}
-                    onPress={() => openHistory(item)}
+                    onPress={(e) => {
+                      // Evita o duplo openHistory: o Pressable pai também
+                      // responde ao toque (eventos de touch propagam no RN).
+                      e.stopPropagation();
+                      openHistory(item);
+                    }}
                   />
                 )}
               </View>
@@ -633,7 +654,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   summaryCard: {
-    width: 150,
+    width: 140,
     marginHorizontal: 4,
     backgroundColor: colors.surface,
     borderColor: colors.border,
@@ -672,7 +693,7 @@ const styles = StyleSheet.create({
   },
   unavailableBadge: {
     backgroundColor: colors.dangerContainer,
-    color: colors.warning,
+    color: colors.danger,
     fontSize: 12,
     alignSelf: 'flex-start',
     borderRadius: 4,

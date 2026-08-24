@@ -38,7 +38,16 @@ router.get('/', async (req, res) => {
   }
 
   const threshold = lastPulledAt.toISOString();
-  const limit = Math.min(parseInt(req.query.limit, 10) || DEFAULT_LIMIT, MAX_LIMIT);
+  // Capturar o timestamp da sincronização ANTES de qualquer query. Se fosse
+  // capturado depois (ou em cada lote), as linhas commitadas entre o snapshot
+  // das queries e o Date.now() ficariam com updated_at abaixo do cursor
+  // guardado pelo cliente e seriam ignoradas PARA SEMPRE.
+  const syncTimestamp = Date.now();
+  const limitRaw = parseInt(req.query.limit, 10);
+  const limit = Math.min(
+    Number.isFinite(limitRaw) && limitRaw > 0 ? limitRaw : DEFAULT_LIMIT,
+    MAX_LIMIT
+  );
 
   // Cursor "created_epoch,id" — continua após o último item do lote anterior.
   // created_epoch usa EXTRACT(EPOCH) do PostgreSQL (precisão de microssegundos),
@@ -151,7 +160,7 @@ router.get('/', async (req, res) => {
           deleted: [],
         },
       },
-      timestamp: Date.now(),
+      timestamp: syncTimestamp,
       next_cursor: nextCursor,
       has_more: hasMore,
       truncated: Boolean(truncated),

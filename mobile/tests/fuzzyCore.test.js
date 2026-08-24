@@ -33,6 +33,14 @@ test('getSimilarity Jaccard', () => {
   assert.ok(low < 0.3);
 });
 
+test('getSimilarity nunca passa de 1 (tokens duplicados deduped)', () => {
+  // Regressão: com tokens repetidos a semelhança chegava a 1.5, furando os
+  // gates de qualidade do matcher (bestSim >= 0.5).
+  const sim = getSimilarity('Arroz Agulha Arroz Agulha', '', 'Arroz Agulha', '');
+  assert.ok(sim <= 1, `semelhança deve ser <= 1, foi ${sim}`);
+  assert.strictEqual(sim, 1);
+});
+
 test('getMandatoryKeyword casa palavras acentuadas (normalizadas)', () => {
   assert.strictEqual(getMandatoryKeyword('Miolo de Camarão 80/100'), 'camarao');
   assert.strictEqual(getMandatoryKeyword('Leite de búfala'), 'bufala');

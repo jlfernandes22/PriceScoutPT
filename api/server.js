@@ -54,20 +54,28 @@ app.use((req, res, next) => {
 // Limitador de taxa simples por IP (janela fixa) para proteger o free tier de
 // loops/bots/aplicações com bugs. Generoso para não afetar utilizadores reais
 // (uma sincronização completa faz ~12 pedidos em sequência rápida).
-const RATE_LIMITS = {
-  '/api/sync': { windowMs: 60000, max: 600 },
-  '/api/products': { windowMs: 60000, max: 300 },
-  '/api/categories': { windowMs: 60000, max: 300 },
-  '/api/scrape': { windowMs: 60000, max: 20 },
-  DEFAULT: { windowMs: 60000, max: 600 },
-};
+// A correspondência é por PREFIXO e ordenada do mais específico para o menos
+// específico, para que /api/products/:id e /api/scrape/status/:id recebam o
+// limite pretendido (o req.path exato nunca coincide nesses casos).
+const RATE_LIMITS = [
+  { prefix: '/api/scrape/status', windowMs: 60000, max: 300 },
+  { prefix: '/api/scrape', windowMs: 60000, max: 20 },
+  { prefix: '/api/sync', windowMs: 60000, max: 600 },
+  { prefix: '/api/products', windowMs: 60000, max: 300 },
+  { prefix: '/api/categories', windowMs: 60000, max: 300 },
+];
+const DEFAULT_RATE_LIMIT = { prefix: 'default', windowMs: 60000, max: 600 };
 const hits = new Map();
 setInterval(() => hits.clear(), 60000).unref();
 
 app.use((req, res, next) => {
-  const key = req.ip || 'unknown';
   const now = Date.now();
-  const cfg = RATE_LIMITS[req.path] || RATE_LIMITS.DEFAULT;
+  // Balde por IP+rota: sem a rota na chave, a contagem acumula entre endpoints
+  // e um limite baixo (ex: POST /api/scrape, max 20) disparava 429 só porque o
+  // mesmo IP já tinha feito pedidos a outras rotas.
+  const cfg =
+    RATE_LIMITS.find((r) => req.path.startsWith(r.prefix)) || DEFAULT_RATE_LIMIT;
+  const key = `${req.ip || 'unknown'}:${cfg.prefix}`;
   const bucket = hits.get(key) || { start: now, count: 0 };
   if (now - bucket.start > cfg.windowMs) {
     bucket.start = now;
@@ -141,7 +149,12 @@ app.use((req, res) => {
 // eslint-disable-next-line no-unused-vars
 app.use((err, req, res, next) => {
   console.error('Unhandled error:', err);
-  res.status(500).json({ error: 'Internal server error.' });
+  // Erros com status próprio (ex: JSON malformado do express.json → 400) não
+  // devem ser mascarados como 500.
+  const status = err.status || err.statusCode || 500;
+  const message =
+    status < 500 ? 'Invalid request.' : 'Internal server error.';
+  res.status(status).json({ error: message });
 });
 
 app.listen(port, () => {

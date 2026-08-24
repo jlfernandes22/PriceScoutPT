@@ -78,13 +78,15 @@ export const getMandatoryKeyword = (name) => {
 
 // Semelhança Jaccard sobre tokens de conteúdo significativos.
 export const getSimilarity = (name1, brand1, name2, brand2) => {
-  const a = contentTokens(name1, brand1);
-  const b = contentTokens(name2, brand2);
-  if (a.length + b.length === 0) return 0;
-  const sa = new Set(a);
+  // Dedup obrigatório: com tokens repetidos, o denominador crescia menos que
+  // o numerador e a "semelhança" podia passar de 1 ("Arroz Agulha Arroz" vs
+  // "Arroz Agulha" dava 1.5), furando os gates de qualidade do matcher.
+  const a = [...new Set(contentTokens(name1, brand1))];
+  const b = new Set(contentTokens(name2, brand2));
+  if (a.length + b.size === 0) return 0;
   let inter = 0;
-  for (const t of a) if (b.includes(t)) inter++;
-  return inter / (a.length + b.length - inter);
+  for (const t of a) if (b.has(t)) inter++;
+  return inter / (a.length + b.size - inter);
 };
 
 // Tokens mais específicos (os mais longos) para pesquisar candidatos na BD.

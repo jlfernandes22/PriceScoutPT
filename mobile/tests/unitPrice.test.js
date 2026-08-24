@@ -26,6 +26,15 @@ test('parseUnit: multi-pack 12 x 330 ml', () => {
   assert.strictEqual(u.type, 'volume');
 });
 
+test('parseUnit: multi-pack com contagem 1 (1 x 500 g)', () => {
+  // Regressão: antes devolvia null — o gate `count * baseQty > baseQty`
+  // rejeitava count=1 e o fallback casava com "1 x" (unidade desconhecida).
+  const u = parseUnit('1 x 500 g', 'x');
+  assert.ok(u, 'devolve resultado para "1 x 500 g"');
+  assert.strictEqual(u.type, 'weight');
+  assert.strictEqual(u.baseQty, 500);
+});
+
 test('parseUnit: unidades', () => {
   const u = parseUnit('emb. 4 un', 'x');
   assert.strictEqual(u.type, 'count');

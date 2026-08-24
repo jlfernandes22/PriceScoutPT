@@ -37,6 +37,26 @@ export const radius = {
   xl: 16,
 };
 
+// Cores de marca dos supermercados (badges, chips de filtro, preços).
+// Fonte única — ProductCard mapeia os ids da BD para estas cores.
+export const supermarketBrands = {
+  continente: '#C62828',
+  lidl: '#0050AA',
+  pingodoce: '#2B8C3D',
+  aldi: '#003A70',
+  auchan: '#E4002B',
+};
+
+// Converte '#RRGGBB' + alpha em 'rgba(r, g, b, alpha)' — para gráficos e
+// overlays que precisam da cor primária com transparência.
+export const rgba = (hex, alpha) => {
+  const h = hex.replace('#', '');
+  const r = parseInt(h.substring(0, 2), 16);
+  const g = parseInt(h.substring(2, 4), 16);
+  const b = parseInt(h.substring(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+};
+
 export const paperTheme = {
   ...MD3LightTheme,
   colors: {

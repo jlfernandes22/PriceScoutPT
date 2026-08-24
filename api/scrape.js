@@ -8,20 +8,21 @@ const db = require('./db');
 const router = express.Router();
 
 // Estado simples em memória dos jobs de scraping
-// Limpeza automática: jobs com mais de 1 hora são removidos
+// Limpeza automática: jobs terminados com mais de 1 hora são removidos
 const jobs = new Map();
 const JOB_MAX_AGE_MS = 60 * 60 * 1000; // 1 hora
-let running = false; // single-flight: só uma recolha de cada vez
 
 function cleanupOldJobs() {
   const now = Date.now();
   for (const [id, job] of jobs) {
+    // NUNCA remover um job 'running': o processo Python detached continua a
+    // correr, e apagar o job quebraria o single-flight (isAnyRunning deixaria
+    // de o ver, permitindo lançar um segundo scraper concorrente) e faria
+    // /status/:id começar a devolver 404. O job sai daqui quando termina.
+    if (job.status === 'running') continue;
     const started = new Date(job.started_at).getTime();
     if (now - started > JOB_MAX_AGE_MS) {
       jobs.delete(id);
-      if (job.status === 'running') {
-        running = false;
-      }
     }
   }
 }
@@ -82,7 +83,6 @@ router.post('/', (req, res, next) => {
   }
 
   const jobId = crypto.randomUUID();
-  running = true;
   jobs.set(jobId, {
     id: jobId,
     status: 'running',
@@ -122,7 +122,6 @@ router.post('/', (req, res, next) => {
       job.finished_at = new Date().toISOString();
       job.error = err.message;
     }
-    running = false;
   });
 
   child.on('close', (code) => {
@@ -132,7 +131,6 @@ router.post('/', (req, res, next) => {
       job.finished_at = new Date().toISOString();
       job.exit_code = code;
     }
-    running = false;
   });
 
   res.status(202).json({ job_id: jobId, status: 'running', scrapers: valid.length > 0 ? valid : VALID_SCRAPERS });

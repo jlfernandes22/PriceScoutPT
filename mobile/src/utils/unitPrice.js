@@ -76,12 +76,14 @@ export const parseUnit = (unitStr, nameStr) => {
   const tryString = (str) => {
     if (!str) return null;
 
-    // Multi-pack: "<n> x <qty> <unidade>" (ex: "12 x 330 ml")
+    // Multi-pack: "<n> x <qty> <unidade>" (ex: "12 x 330 ml", "1 x 500 g")
     const mp = str.match(/(\d+)\s*x\s*(\d+(?:\.\d+)?)\s*([a-z]+)\.?\b/);
     if (mp) {
       const count = parseInt(mp[1], 10);
       const single = matchQty(`${mp[2]} ${mp[3]}`);
-      if (count >= 1 && single && count * single.baseQty > single.baseQty) {
+      // count >= 1: "1 x 500 g" também é válido. Sem isto, caía no matchQty
+      // abaixo, que casava com o "1 x" e devolvia null (unidade 'x').
+      if (count >= 1 && single) {
         return {
           type: single.type,
           baseQty: single.baseQty * count,

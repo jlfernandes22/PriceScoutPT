@@ -1,15 +1,15 @@
-import React, { useState, memo } from 'react';
+import React, { useState, useEffect, memo } from 'react';
 import { View, StyleSheet, Image } from 'react-native';
-import { colors } from '../theme';
-import { Card, Text, IconButton, Badge } from 'react-native-paper';
+import { colors, supermarketBrands } from '../theme';
+import { Card, Text, IconButton, Icon } from 'react-native-paper';
 
-// Identidade visual dos supermercados (fonte única para toda a app)
+// Identidade visual dos supermercados (cores vivem em theme.js — fonte única)
 export const SUPERMARKET_BRANDS = {
-  '00000000-0000-0000-0000-000000000001': { name: 'Continente', color: colors.danger },
-  '00000000-0000-0000-0000-000000000002': { name: 'Lidl', color: '#0050AA' },
-  '00000000-0000-0000-0000-000000000003': { name: 'Pingo Doce', color: '#2B8C3D' },
-  '00000000-0000-0000-0000-000000000004': { name: 'Aldi', color: '#003A70' },
-  '00000000-0000-0000-0000-000000000005': { name: 'Auchan', color: '#E4002B' },
+  '00000000-0000-0000-0000-000000000001': { name: 'Continente', color: supermarketBrands.continente },
+  '00000000-0000-0000-0000-000000000002': { name: 'Lidl', color: supermarketBrands.lidl },
+  '00000000-0000-0000-0000-000000000003': { name: 'Pingo Doce', color: supermarketBrands.pingodoce },
+  '00000000-0000-0000-0000-000000000004': { name: 'Aldi', color: supermarketBrands.aldi },
+  '00000000-0000-0000-0000-000000000005': { name: 'Auchan', color: supermarketBrands.auchan },
 };
 
 export const getSupermarket = (id) =>
@@ -25,14 +25,20 @@ export const formatPrice = (price) => {
 export const ProductImage = ({ url, color, size }) => {
   const [failed, setFailed] = useState(false);
 
+  // Uma URL que falhou uma vez (404 temporário) não pode falhar para sempre:
+  // a sync atualiza image_url no mesmo registo (mesma instância React).
+  useEffect(() => {
+    setFailed(false);
+  }, [url]);
+
   if (!url || failed) {
     return (
       <View
-        style={[styles.imageFallback, { backgroundColor: `${color}22`, width: size, height: size }]}
+        style={[styles.imageFallback, { backgroundColor: `${color}14`, width: size, height: size }]}
         accessible={false}
         importantForAccessibility="no-hide-descendants"
       >
-        <View style={[styles.imageFallbackIcon, { backgroundColor: color }]} />
+        <Icon source="basket-outline" size={Math.round(size * 0.38)} color={`${color}99`} />
       </View>
     );
   }
@@ -147,13 +153,6 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   imageFallback: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  imageFallbackIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
   },

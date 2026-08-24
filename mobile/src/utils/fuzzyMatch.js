@@ -102,6 +102,7 @@ export const useLocalFuzzyMatch = (product) => {
     let isMounted = true;
     if (!product) {
       setMatches({});
+      setLoading(false);
       return;
     }
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback, memo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef, memo } from 'react';
 import { View, StyleSheet, FlatList, ScrollView, Keyboard } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Searchbar, Text, IconButton, Portal, Dialog, Button, TextInput, RadioButton, Surface, Chip, Icon, Snackbar } from 'react-native-paper';
@@ -15,6 +15,7 @@ const ALL_SUPERMARKETS = 'all';
 
 const ProductList = memo(function ProductList({
   products,
+  searchTerm,
   categories,
   selectedSupermarket,
   selectedCategoryId,
@@ -29,6 +30,20 @@ const ProductList = memo(function ProductList({
   onLoadMore,
 }) {
   const [showAllCategories, setShowAllCategories] = useState(false);
+
+  // Relevância dentro da página: produtos cujo nome COMEÇA pelo termo pesquisado
+  // aparecem primeiro ("leite" → "Leite Magro" antes de "Bola de Berlim Doce de
+  // Leite"). A ordenação SQL é alfabética; este passe é estável e barato (≤60 itens).
+  const sortedProducts = useMemo(() => {
+    const term = (searchTerm || '').trim().toLowerCase();
+    if (!term) return products;
+    return [...products].sort((a, b) => {
+      const aStarts = a.name.toLowerCase().startsWith(term) ? 0 : 1;
+      const bStarts = b.name.toLowerCase().startsWith(term) ? 0 : 1;
+      if (aStarts !== bStarts) return aStarts - bStarts;
+      return a.name.localeCompare(b.name, 'pt-PT');
+    });
+  }, [products, searchTerm]);
 
   const visibleCategories = useMemo(() => {
     // As categorias são canónicas (globais) — aplicam-se a todos os supermercados.
@@ -57,7 +72,7 @@ const ProductList = memo(function ProductList({
           <Chip
             selected={selectedSupermarket === ALL_SUPERMARKETS}
             onPress={() => onSupermarketChange(ALL_SUPERMARKETS)}
-            style={[styles.filterChip, { backgroundColor: selectedSupermarket === ALL_SUPERMARKETS ? colors.textPrimary : colors.surfaceVariant }]}
+            style={[styles.filterChip, { backgroundColor: selectedSupermarket === ALL_SUPERMARKETS ? colors.primary : colors.surfaceVariant }]}
             selectedColor={colors.surface}
             showSelectedOverlay={false}
             textStyle={{ color: selectedSupermarket === ALL_SUPERMARKETS ? colors.surface : colors.textSecondary, fontSize: 13 }}
@@ -131,8 +146,8 @@ const ProductList = memo(function ProductList({
       )}
 
       <FlatList
-        data={products}
-        keyExtractor={(item, index) => item.id ? `${item.id}-${index}` : index.toString()}
+        data={sortedProducts}
+        keyExtractor={(item) => item.id}
         renderItem={renderItem}
         contentContainerStyle={styles.listContainer}
         refreshing={refreshing}
@@ -180,6 +195,9 @@ const enhanceList = withObservables(
     if (selectedCategoryId) {
       conditions.push(Q.where('category_id', selectedCategoryId));
     }
+    // Ordenação estável por nome: sem isto a ordem era a "natural" do SQLite,
+    // instável entre sincronizações e sem qualquer relação com o termo pesquisado.
+    conditions.push(Q.sortBy('name', Q.asc));
     conditions.push(Q.take(Math.min(limit, MAX_LIST_RESULTS)));
 
     return {
@@ -189,7 +207,7 @@ const enhanceList = withObservables(
 );
 const EnhancedProductList = enhanceList(ProductList);
 
-const SearchScreen = ({ shoppingLists, favorites, categories }) => {
+const SearchScreen = ({ shoppingLists, favorites, categories, onResetDatabase }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [selectedSupermarket, setSelectedSupermarket] = useState(ALL_SUPERMARKETS);
@@ -197,7 +215,10 @@ const SearchScreen = ({ shoppingLists, favorites, categories }) => {
   const [syncing, setSyncing] = useState(false);
   const [syncTrigger, setSyncTrigger] = useState(null);
   const [syncMessage, setSyncMessage] = useState('');
-  const [searchTimer, setSearchTimer] = useState(null);
+  // O timer de debounce vive num ref: em estado, duas escritas rápidas antes
+  // do re-render fechavam sobre o mesmo valor obsoleto e deixavam escapar um
+  // timeout intermédio (e o timer nunca era limpo no unmount).
+  const searchTimerRef = useRef(null);
 
   const [isDialogVisible, setIsDialogVisible] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
@@ -232,11 +253,16 @@ const SearchScreen = ({ shoppingLists, favorites, categories }) => {
     }
   }, [shoppingLists]);
 
+  // Limpar o timer pendente ao desmontar (evita setState após unmount).
+  useEffect(() => () => {
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+  }, []);
+
   const onChangeSearch = (query) => {
     setSearchQuery(query);
     resetPagination();
-    if (searchTimer) clearTimeout(searchTimer);
-    setSearchTimer(setTimeout(() => setDebouncedQuery(query), 300));
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    searchTimerRef.current = setTimeout(() => setDebouncedQuery(query), 300);
   };
 
   const handleSync = useCallback(async (trigger = 'button') => {
@@ -330,6 +356,7 @@ const SearchScreen = ({ shoppingLists, favorites, categories }) => {
   }, []);
 
   const handleViewHistory = useCallback((product) => {
+    Keyboard.dismiss();
     setSelectedProductForHistory(product);
     setIsHistoryVisible(true);
   }, []);
@@ -416,6 +443,7 @@ const SearchScreen = ({ shoppingLists, favorites, categories }) => {
       <SettingsModal
         visible={isSettingsVisible}
         onDismiss={() => setIsSettingsVisible(false)}
+        onResetDatabase={onResetDatabase}
       />
 
       <Snackbar
