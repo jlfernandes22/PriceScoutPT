@@ -18,7 +18,11 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0050AA"
-      }
+      },
+      "permissions": [
+        "android.permission.INTERNET",
+        "android.permission.VIBRATE"
+      ]
     },
     "ios": {
       "bundleIdentifier": "com.pricescoutpt.app",
