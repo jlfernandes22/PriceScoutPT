@@ -62,41 +62,6 @@ jobs:
         working-directory: scraper
         run: pip install -r requirements.txt
 
-      - name: Diagnóstico público Froiz (apenas metadados da resposta)
-        if: ${{ inputs.scrapers == 'Froiz' || inputs.scrapers == 'Froiz,Aldi' }}
-        working-directory: scraper
-        shell: bash
-        run: |
-          python - <<'PY'
-          import json
-          import requests
-          from scrapers.froiz import FroizScraper
-          scraper = FroizScraper(None)
-          endpoints = [
-              ('categories', {'channel.id': 1, 'isEnabled': 'true', 'coverage[gte]': 0}),
-              ('products', {'page': 1, 'size': 2}),
-          ]
-          for endpoint, params in endpoints:
-              result = {'endpoint': endpoint}
-              try:
-                  response = scraper.session.get(f'{scraper.api_base_url}/api/{endpoint}', params=params, timeout=30)
-                  result.update(status=response.status_code, content_type=response.headers.get('Content-Type'))
-                  if response.ok:
-                      data = response.json()
-                      result['json_type'] = type(data).__name__
-                      if isinstance(data, list):
-                          result['items'] = len(data)
-                          result['first_item_keys'] = sorted(data[0]) if data and isinstance(data[0], dict) else []
-                      elif isinstance(data, dict):
-                          result['keys'] = sorted(data)
-                          for field in ('products', 'families', 'categories'):
-                              if isinstance(data.get(field), list):
-                                  result[field + '_count'] = len(data[field])
-              except (requests.RequestException, ValueError) as error:
-                  result['error_type'] = type(error).__name__
-              print(json.dumps(result), flush=True)
-          PY
-
       - name: Azure login (OIDC, sem credencial persistente)
         uses: azure/login@v2
         with:
