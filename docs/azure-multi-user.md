@@ -1,72 +1,53 @@
-# ☁️ Auditoria de produção — uso multi-utilizador no Azure (free tier)
+# Operação do backend no Azure
 
-**Data:** 2026-08-05 · **Stack:** Azure Container Apps (0.5 CPU / 1.0 GiB, `min-replicas 0`, `max-replicas 1`) + PostgreSQL Flexible Server **B1ms** (free) · **Dados:** ~57.021 produtos / 61.906 histórico / 19 categorias / 5 supermercados.
+Atualizado em **29/10/2026**. Configuração prevista: Azure Container Apps em Consumption, 0,5 CPU / 1 GiB, `min-replicas 0`, `max-replicas 1`, e PostgreSQL Flexible Server B1ms. As contagens de produtos e as datas de recolha devem ser consultadas em `GET /api/stats`; uma cópia offline no telemóvel não prova que o servidor está disponível.
 
-> **Atualização 2026-08-05:** a recolha passou a ser **diária e automática** (GitHub Actions às ~13:00 → `POST /api/scrape`). A app **não dispara recolhas** nem faz polling contínuo — apenas sincroniza e lê a hora da última recolha uma vez ao abrir o painel. Isto eliminou o consumo de pedidos do polling e a folga apertada do rate limit do `/api/scrape`.
+## Recolha diária e manual
 
----
+O workflow `.github/workflows/daily-scrape.yml` executa os seis coletores HTTP **diretamente no runner do GitHub Actions** e grava no PostgreSQL usando o secret `PRICESCOUTPT_DATABASE_URL`. Não faz pedidos ao endpoint de scraping da API. Corre às **12:00 UTC**: 12:00 em Portugal continental no inverno, 13:00 no verão.
 
-## 1. Escala-a-zero (Container Apps)
+A recolha diária consulta até 100 páginas públicas de detalhe por coletor. Em *Run workflow* podes escolher todos os seis, um coletor individual ou `Froiz,Aldi`, e ajustar o limite de detalhes. O Intermarché continua opcional fora deste workflow, porque exige browser e a fonte tem restrições documentadas em [retailer-sources.md](retailer-sources.md).
 
-- `--min-replicas 0 --max-replicas 1` → o contentor **dorme** quando não há pedidos e acorda a pedido.
-- **Custo efetivo ≈ 0 €** em idle; o consumo só conta quando há tráfego real.
-- **Cold start:** o primeiro pedido após idle sofre ~5-15 s de arranque (Node + pool PostgreSQL). Irrelevante para o uso por botão *Atualizar Agora*; notório se se quiser usar a app como API de consulta em tempo real.
-- Se a latência de arranque incomodar, `--min-replicas 1` garante warm start — ainda dentro do orçamento gratuito para uso ligeiro (180k vCPU-s / mês ≈ 250 h de 0.5 CPU).
+As execuções manuais e agendadas usam o mesmo grupo de concorrência e não cancelam uma execução em curso. O limite de duração é 180 minutos. Uma recolha parcial pode guardar observações válidas, mas não retira os produtos ausentes. O workflow não recebe credenciais de webhooks nem envia mensagens para Slack/Discord.
 
-## 2. Rate limiting por IP (express custom, `api/server.js`)
+O acesso à firewall usa OIDC em `azure/login@v2`, com a identidade `pricescoutpt-github` autorizada apenas para a branch `main` de `jlfernandes22/PriceScoutPT`. A identidade tem leitura do servidor e leitura/criação/remoção de regras de firewall, com atribuição limitada ao servidor PostgreSQL deste projeto; não tem permissões de escrita no servidor nem acesso aos dados por RBAC. A ligação SQL continua no secret `PRICESCOUTPT_DATABASE_URL`.
 
-| Rota | Limite/min | Notas |
-|---|---|---|
-| `/api/sync` | 600 | Sincronização completa = ~12 pedidos (57.021 / 5.000 por lote) → **1% do limite**. |
-| `/api/products` | 300 | Pesquisa/browse. |
-| `/api/categories` | 300 | 1 pedido por arranque. |
-| `/api/scrape*` | **20** | Recolha diária = 1 POST (+ raros disparos manuais). Folga enorme. |
-| default | 600 | `/health`, `/stats`, etc. |
+As variáveis não secretas `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `AZURE_RESOURCE_GROUP` e `AZURE_POSTGRES_SERVER` configuram esse acesso. Executa os disparos manuais na branch `main`. O runner descobre e valida o seu IPv4 público, cria a regra `gh-<run_id>-<run_attempt>` com início e fim nesse único endereço e aguarda a propagação antes de recolher. Um passo com `always()` remove a regra no fim, mesmo se a recolha falhar, com três tentativas. Uma interrupção abrupta do runner pode impedir a limpeza; nesse caso remove apenas a regra da execução terminada, depois de confirmar o estado no GitHub. Não é necessária uma regra que permita toda a Internet para os runners.
 
-A app só toca em `/api/scrape*` **uma vez por abertura do painel** (GET `/status` para mostrar a hora da última recolha). Sem polling contínuo, os 20/min nunca são sequer aproximados, mesmo com vários dispositivos no mesmo IP.
+`POST /api/scrape` permite disparos manuais ocasionais no contentor. O bloqueio em memória desse endpoint impede jobs concorrentes no mesmo processo da API; é independente da concorrência do GitHub Actions. Não o uses enquanto o workflow estiver a recolher. Recolhas longas devem correr no runner, pois um contentor com escala-a-zero pode ser interrompido.
 
-## 3. Orçamento de pedidos do free plan (2M HTTP requests/mês)
+`GET /api/scrape/status` mostra jobs do processo atual e a data persistida `MAX(last_scraped_at)`. Os jobs em memória desaparecem num reinício; a data persistida não comprova que todos os coletores terminaram sem erros. Para o resultado completo, consulta o job do workflow.
 
-Sem polling contínuo, o consumo da app é mínimo:
+## API e sincronização
 
-| Atividade | Pedidos |
-|---|---|
-| Sincronização (descarregar a recolha do dia) | ~12 (57.021 / 5.000 por lote) |
-| Abrir painel de controlo (última recolha) | 1 |
-| Pesquisas/favoritos/cabaz | 1-2/uso |
-| Recolha diária (GitHub Actions) | 1 POST/dia |
+A app não dispara recolhas nem faz polling contínuo. Ao abrir o painel, consulta o estado da última recolha; ao sincronizar, recebe produtos em lotes de 5.000. As alterações e remoções também são paginadas.
 
-- ~1.000 sincronizações completas/mês = ~12k pedidos → **2% do orçamento**.
-- O free plan aguenta **dezenas a centenas de utilizadores ativos** com margem; o polling contínuo (removido) era o único risco real.
+| Rota | Limite por minuto e IP |
+| --- | --- |
+| `/api/sync` | 600 |
+| `/api/products`, `/api/categories` | 300 |
+| `/api/scrape/status` | 300 |
+| `/api/scrape` | 20 |
+| Restantes rotas | 600 |
 
-## 4. Ligações PostgreSQL (B1ms)
+O pool da API permite até 10 ligações, com timeout de ligação de 10 segundos. O scraper usa ligações separadas. Verifica `SHOW max_connections` no servidor escolhido antes de aumentar réplicas ou executar recolhas concorrentes.
 
-- Pool da API: `max: 10` (`api/db.js`), `connectionTimeoutMillis: 10000`.
-- Limite documentado do B1ms (1 vCore): **~35 conexões**.
-- Headroom: pool (10) + scraper (conexões transientes, 1-3) + `psql`/ferramentas → **bem abaixo das 35**.
-- O `connectionTimeoutMillis: 10000` evita que pedidos fiquem presos a esperar por uma ligação livre em picos.
-- **Sem risco** para o perfil multi-utilizador previsto.
+Para uma atualização existente, aplica as migrações com uma cópia de segurança e sem recolhas/sincronizações em curso, seguindo [data-collection.md](data-collection.md). Guarda a imagem/revisão anterior para poder reverter a API. As migrações 003/004 acrescentam campos e funções; reverter a imagem não exige apagar esses campos.
 
-## 5. Recolha single-flight (agora só a diária)
+Depois do deploy, verifica `GET /api/health` e confirma **`db: "up"`** no JSON; o endpoint pode devolver HTTP 200 mesmo com `db: "down"`. Confirma também pesquisa, cobertura (`/api/supermarkets`), detalhes e sincronização paginada, e volta a testar sincronização/histórico no telemóvel.
 
-- A recolha é disparada pelo **GitHub Actions** todos os dias (`POST /api/scrape`) — só **um job de cada vez** no servidor (409 se já houver um em curso).
-- A app já não dispara recolhas; o `POST /api/scrape` fica para o scheduler e para disparos manuais via curl.
-- Os jobs em memória perdem-se num reinício do contentor, mas a hora da última recolha aparece persistida: `GET /api/scrape/status` devolve `last_scrape_at` = `MAX(last_scraped_at)` dos produtos (sobrevive ao idle/cold-start).
+## Custos e configuração mínima
 
-## 6. Segurança
+O [plano Consumption](https://learn.microsoft.com/en-us/azure/container-apps/billing) inclui mensalmente, por subscrição, 180.000 vCPU-segundos, 360.000 GiB-segundos e 2 milhões de pedidos. Estes limites são partilhados com outros recursos elegíveis da subscrição; consumos acima dos limites podem ser cobrados. `min-replicas 0` reduz consumo sem tráfego. Manter uma réplica permanente pode ultrapassar essas franquias.
 
-- `POST /api/scrape` exige header **`x-scrape-secret`** → 401 sem ele. Rotacionável via `az containerapp update --set-env-vars SCRAPE_SECRET=...`.
-- Endpoints de leitura (`/sync`, `/products`, `/categories`, `/scrape/status`) são públicos por design (catálogo é dado público dos sites); o único mutador (scrape) está protegido.
-- Sem segredos em git (`app.config.local.json` ignorado; `app.json` com placeholders).
+A oferta [Azure for Students](https://azure.microsoft.com/en-us/free/students/) anuncia, durante 12 meses, 750 horas de PostgreSQL B1ms, 32 GB de armazenamento e 32 GB de backups. Confirma a elegibilidade e o período restante na subscrição antes de assumir custo zero. Outras configurações, excesso de utilização e serviços adicionais podem consumir crédito ou gerar custos.
 
-## 7. Resumo executivo
+Para uma instalação pequena, evita alta disponibilidade, perfis Dedicated e recursos acessórios sem necessidade. Um ambiente criado com `--logs-destination none` não cria um workspace Log Analytics para os logs da aplicação; os logs persistentes ficam indisponíveis nessa configuração. A disponibilidade de regiões/SKUs deve ser verificada na subscrição no momento da criação.
 
-| Área | Veredicto |
-|---|---|
-| Custo | 0 € com escala-a-zero + free tiers |
-| Cold start | Aceitável (5-15 s); `min-replicas 1` se necessário |
-| Rate limits | Folga ampla (a app já não faz polling; 20/min no `/api/scrape` só para o job diário) |
-| Pedidos/mês | Sem polling: ~2% do orçamento para 1.000 sincronizações → dezenas a centenas de utilizadores |
-| DB conexões | Folga confortável (10 de ~35) |
-| Concorrência de scrape | Só o job diário; single-flight + 409 corretos |
-| Segurança | Scrape protegido por segredo (só o GitHub Actions o usa); nada de segredos no repo |
+Os scrapers correm em GitHub Actions; o respetivo consumo de minutos depende da duração real e do plano/visibilidade do repositório. Não é apenas um pedido HTTP por dia.
+
+## Segredos
+
+Guarda a ligação do PostgreSQL como secret do Container App e do GitHub Actions; nunca a escrevas em logs ou commits. Configura `SCRAPE_SECRET` para proteger o endpoint manual: sem essa variável, a proteção desse endpoint é opcional no código atual. A app não precisa desse segredo para consultar ou sincronizar.
+
+Os endpoints de leitura são públicos. `mobile/app.config.local.json` continua ignorado pelo Git e permite configurar a URL do backend durante a compilação; o servidor também pode ser alterado nas definições da app.

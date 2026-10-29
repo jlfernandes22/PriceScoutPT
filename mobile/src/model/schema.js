@@ -1,7 +1,7 @@
 import { appSchema, tableSchema } from '@nozbe/watermelondb';
 
 export const schema = appSchema({
-  version: 5,
+  version: 6,
   tables: [
     tableSchema({
       name: 'supermarkets',
@@ -37,6 +37,17 @@ export const schema = appSchema({
         { name: 'unit', type: 'string', isOptional: true },
         { name: 'url', type: 'string', isOptional: true },
         { name: 'image_url', type: 'string', isOptional: true },
+        { name: 'barcode', type: 'string', isOptional: true },
+        { name: 'regular_price', type: 'number', isOptional: true },
+        { name: 'unit_price', type: 'number', isOptional: true },
+        { name: 'unit_price_unit', type: 'string', isOptional: true },
+        { name: 'source_type', type: 'string', isOptional: true },
+        { name: 'source_url', type: 'string', isOptional: true },
+        { name: 'store_location', type: 'string', isOptional: true },
+        { name: 'observed_at', type: 'number', isOptional: true },
+        { name: 'requires_loyalty_card', type: 'boolean' },
+        { name: 'valid_from', type: 'number', isOptional: true },
+        { name: 'valid_to', type: 'number', isOptional: true },
         { name: 'in_stock', type: 'boolean' },
         { name: 'deleted', type: 'boolean' },
         { name: 'last_scraped_at', type: 'number', isOptional: true },

@@ -7,6 +7,8 @@ const {
   getMandatoryKeyword,
   significantTokens,
   likeVariants,
+  getDietaryQualifiers,
+  haveCompatibleDietaryQualifiers,
 } = require('../src/utils/fuzzyCore.js');
 
 test('normalize remove acentos e minúsculas', () => {
@@ -65,4 +67,38 @@ test('likeVariants gera variantes acentuadas por posição', () => {
   assert.ok(v2.includes('miolo'));
   // Token sem vogais acentuáveis -> apenas o próprio
   assert.deepStrictEqual(likeVariants('ttx'), ['ttx']);
+});
+
+test('dietary matching rejects contradictory and unlabelled candidates for explicit restrictions', () => {
+  for (const [restricted, ordinary] of [
+    ['Leite sem lactose', 'Leite com lactose'],
+    ['Leite sem lactose', 'Leite magro'],
+    ['Pão sem glúten', 'Pão integral'],
+    ['Bolachas sem açúcar', 'Bolachas com açúcar'],
+    ['Cerveja sem álcool', 'Cerveja tradicional'],
+    ['Manteiga sem sal', 'Manteiga com sal'],
+  ]) {
+    assert.strictEqual(haveCompatibleDietaryQualifiers(restricted, ordinary), false, `${restricted} vs ${ordinary}`);
+    assert.strictEqual(haveCompatibleDietaryQualifiers(ordinary, restricted), false, 'a guarda é simétrica');
+  }
+});
+
+test('dietary matching recognizes equivalent explicit labels without inferring suitability', () => {
+  assert.strictEqual(haveCompatibleDietaryQualifiers('Bolachas zero açúcar', 'Bolachas sem açúcar'), true);
+  assert.strictEqual(haveCompatibleDietaryQualifiers('Bolachas 0% açúcar', 'Bolachas sem açúcares'), true);
+  assert.strictEqual(haveCompatibleDietaryQualifiers('Leite isento de lactose', 'Leite sem lactose'), true);
+  assert.strictEqual(haveCompatibleDietaryQualifiers('Pão gluten-free', 'Pão sem glúten'), true);
+  assert.strictEqual(haveCompatibleDietaryQualifiers('Cerveja 0,0% de álcool', 'Cerveja sem álcool'), true);
+  assert.strictEqual(haveCompatibleDietaryQualifiers('Manteiga s/ sal', 'Manteiga sem sal'), true);
+  assert.deepStrictEqual(getDietaryQualifiers('Arroz Agulha Integral'), {});
+  assert.strictEqual(haveCompatibleDietaryQualifiers('Arroz Agulha', 'Arroz Integral'), true);
+});
+
+test('no-added and reduced claims stay distinct from free-of claims', () => {
+  assert.deepStrictEqual(getDietaryQualifiers('Sumo sem adição de açúcar'), { sugar: 'no_added' });
+  assert.strictEqual(haveCompatibleDietaryQualifiers('Sumo sem adição de açúcar', 'Sumo sem açúcares adicionados'), true);
+  assert.strictEqual(haveCompatibleDietaryQualifiers('Sumo sem adição de açúcar', 'Sumo sem açúcar'), false);
+  assert.strictEqual(haveCompatibleDietaryQualifiers('Sopa baixo teor de sal', 'Sopa sem sal'), false);
+  assert.strictEqual(haveCompatibleDietaryQualifiers('Iogurte menos açúcar', 'Iogurte natural'), false);
+  assert.strictEqual(haveCompatibleDietaryQualifiers('Pão sem glúten e sem lactose', 'Pão sem glúten'), false);
 });

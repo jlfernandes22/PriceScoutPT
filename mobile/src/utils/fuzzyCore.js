@@ -19,6 +19,38 @@ const UNIT_WORDS = new Set([
 export const normalize = (name) =>
   (name || '').toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '');
 
+const DIETARY_TERMS = {
+  lactose: '(?:lactose)',
+  gluten: '(?:gluten)',
+  sugar: '(?:acucar|acucares|sugar)',
+  alcohol: '(?:alcool|alcohol)',
+  salt: '(?:sal|salt)',
+};
+
+// Only explicit labels are compared. Absence of a label is unknown, rather
+// than evidence that a product is suitable for a dietary restriction.
+export function getDietaryQualifiers(name) {
+  const text = normalize(name).replace(/\bs\s*\/\s*/g, 'sem ').replace(/\bc\s*\/\s*/g, 'com ')
+    .replace(/(\d),(\d)/g, '$1.$2').replace(/[-‐‑–—]/g, ' ');
+  const qualifiers = {};
+  for (const [key, term] of Object.entries(DIETARY_TERMS)) {
+    const has = (pattern) => new RegExp(pattern).test(text);
+    // "No added sugar" and "sugar free" make different claims.
+    if (has(`\\bsem\\s+adicao\\s+de\\s+${term}\\b|\\bsem\\s+${term}\\s+adicionad[oa]s?\\b`)) qualifiers[key] = 'no_added';
+    else if (has(`\\b(?:sem|zero)\\s+${term}\\b|\\b(?:isento\\s+de|nao\\s+contem)\\s+${term}\\b`
+      + `|\\b0(?:\\.0+)?\\s*%?\\s*(?:de\\s+)?${term}\\b|\\b${term}\\s*(?:free|zero)\\b`)) qualifiers[key] = 'free';
+    else if (has(`\\b(?:baixo|reduzido)\\s+(?:teor\\s+de\\s+)?${term}\\b|\\bmenos\\s+${term}\\b|\\b${term}\\s+reduzid[oa]s?\\b`)) qualifiers[key] = 'reduced';
+    else if (has(`\\b(?:com|contem)\\s+${term}\\b`)) qualifiers[key] = 'contains';
+  }
+  return qualifiers;
+}
+
+export function haveCompatibleDietaryQualifiers(first, second) {
+  const a = typeof first === 'string' ? getDietaryQualifiers(first) : (first || {});
+  const b = typeof second === 'string' ? getDietaryQualifiers(second) : (second || {});
+  return Object.keys(DIETARY_TERMS).every((key) => a[key] === b[key]);
+}
+
 // Remove da string as palavras que fazem parte da marca,
 // para que "Miolo de Noz Pecan Continente" e "Miolo de Noz Pecã" fiquem equivalentes.
 function removeBrandTokens(text, brand) {

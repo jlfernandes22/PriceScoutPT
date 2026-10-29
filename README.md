@@ -4,13 +4,13 @@
 
 **Comparador de preços de supermercados portugueses — offline-first no telemóvel, recolha diária automática no servidor.**
 
-**Continente · Lidl · Pingo Doce · Aldi · Auchan** — monta o teu cabaz, compara o preço em cada loja e descobre **onde fica mais barato**, mesmo sem internet.
+**Continente · Lidl · Pingo Doce · Aldi · Auchan · Froiz** — monta o teu cabaz, compara o preço em cada loja e descobre **onde fica mais barato**, mesmo sem internet.
 
 ![React Native](https://img.shields.io/badge/React%20Native%20(Expo%2054)-1.0-blue?logo=react)
 ![Node.js](https://img.shields.io/badge/API-Node.js%20%2F%20Express-339933?logo=nodedotjs)
 ![Python](https://img.shields.io/badge/Scrapers-Python%203-3776AB?logo=python)
 ![PostgreSQL](https://img.shields.io/badge/DB-PostgreSQL%2015-4169E1?logo=postgresql)
-![Azure](https://img.shields.io/badge/Deploy-Azure%20Container%20Apps%20(free)-0078D4?logo=microsoftazure)
+![Azure](https://img.shields.io/badge/Deploy-Azure%20Container%20Apps-0078D4?logo=microsoftazure)
 ![Offline](https://img.shields.io/badge/offline--first-WatermelonDB-00C7B7)
 ![License](https://img.shields.io/badge/license-GPL--3.0-brightgreen)
 
@@ -29,7 +29,7 @@
 - [Análise dos scrapers](#análise-dos-scrapers)
 - [Testes](#testes)
 - [Estrutura do projeto](#estrutura-do-projeto)
-- [Deploy no Azure (100% gratuito)](#deploy-no-azure-100-gratuito)
+- [Deploy no Azure](#deploy-no-azure)
 - [Recolha diária automática](#recolha-diária-automática)
 - [Segurança & segredos](#segurança--segredos)
 - [Checklist de Produção & Play Store](#checklist-de-produção--play-store)
@@ -41,15 +41,15 @@
 
 ## ✨ Sobre
 
-O PriceScoutPT junta os catálogos online dos 5 principais supermercados portugueses num só lugar. Os preços são recolhidos automaticamente, todos os dias, a partir dos endpoints públicos que os próprios sites usam nas suas lojas online — e ficam guardados **no telemóvel** para consulta 100% offline.
+O PriceScoutPT junta preços de seis supermercados portugueses, com um coletor de campanhas Intermarché opcional e importação de observações para outras cadeias. A cobertura distingue catálogos online, ofertas públicas e folhetos. Os preços são recolhidos automaticamente, todos os dias, a partir das fontes públicas usadas pelos próprios sites — e ficam guardados **no telemóvel** para consulta 100% offline.
 
 ## 🚀 Funcionalidades
 
-- 🔍 **Pesquisa instantânea** — full-text em português (`pt-PT`) no servidor + filtros offline no dispositivo.
+- 🔍 **Pesquisa instantânea** — pesquisa por palavras, marca, código de barras e acentos; tolerância a erros de escrita offline, filtros e ordenação antes da paginação.
 - 🛒 **Cabaz de compras** — comparador *fuzzy* por produto mostra o total em cada loja e coroa o mais barato 🏆.
 - 📈 **Histórico de preços** — 30 dias, com gráfico de linha (mínimo / atual / máximo).
 - 📴 **100% offline** — depois da primeira sincronização, o catálogo inteiro vive no SQLite do telemóvel.
-- ☁️ **Recolha diária automática** — GitHub Actions → `POST /api/scrape` (cerca das 13:00 em Portugal).
+- ☁️ **Recolha diária automática** — scrapers no GitHub Actions → PostgreSQL, às 12:00 UTC (12:00 em Portugal no inverno, 13:00 no verão).
 - 🔄 **Sincronização incremental** — em chunks de 5.000 produtos, sem estoirar a memória do dispositivo.
 - 🛡️ **Resiliente a recolhas parciais** — se uma categoria falhar, nada é marcado como "esgotado" indevidamente.
 
@@ -75,14 +75,16 @@ O PriceScoutPT junta os catálogos online dos 5 principais supermercados portugu
 
 | Componente | Tecnologia | Papel |
 |---|---|---|
-| **Scrapers** | Python · `requests` · BeautifulSoup | Extraem produtos (nome, preço, imagem, categoria, unidade) dos 5 supermercados |
+| **Scrapers** | Python · `requests` · BeautifulSoup | Extraem nome, preço, marca, descrição, imagem, categoria, embalagem, preço/unidade e condições publicadas |
 | **API** | Node.js · Express | Sincronização incremental, pesquisa/compare, categorias, disparo e estado de recolhas |
 | **Base de dados** | PostgreSQL 15 | Catálogo + histórico de preços (30 dias) + full-text `pt-PT` |
 | **App mobile** | React Native (Expo) · WatermelonDB | Catálogo offline, cabaz, favoritos, gráficos, comparador |
 
 ## 📊 Estado atual
 
-**Base de dados de produção (Azure):** `93.558` produtos · `19` categorias canónicas · `5` supermercados.
+**Cobertura:** seis coletores HTTP; Intermarché opcional via browser; 13 cadeias registadas para preços/importações. Consulta `GET /api/supermarkets` para preços efetivamente disponíveis e `GET /api/stats` para as contagens atuais. O registo de uma cadeia não significa catálogo recolhido.
+
+Configuração de fontes, migrações e importação: [guia de recolha](docs/data-collection.md). Verificação por cadeia: [fontes dos supermercados](docs/retailer-sources.md).
 
 ---
 
@@ -107,7 +109,7 @@ docker compose up -d db api
 ### 2. Popular o catálogo (primeira vez)
 
 ```bash
-docker compose run --rm scraper python main.py            # os 5 supermercados
+docker compose run --rm scraper python main.py            # seis coletores HTTP
 docker compose run --rm scraper python main.py --scraper Lidl
 docker compose run --rm scraper python main.py --scraper Continente,PingoDoce
 ```
@@ -145,10 +147,11 @@ Base local: `http://localhost:3000` · Produção: URL público do Azure. Todas 
 | Método | Rota | Descrição |
 |---|---|---|
 | `GET` | `/api/health` | Estado da API + ligação à BD (liveness probe) |
+| `GET` | `/api/supermarkets` | Cobertura real por cadeia, fontes, última observação e preços utilizáveis |
 | `GET` | `/api/stats` | Contagens por supermercado + `last_scraped_at` + total de categorias |
 | `GET` | `/api/categories` | Taxonomia canónica de categorias |
 | `GET` | `/api/products` | Browse: `?category=mercearia&supermarket=pingo-doce&limit=50&offset=0` |
-| `GET` | `/api/products/compare?name=atum` | Pesquisa full-text `pt-PT`, ordenada por relevância |
+| `GET` | `/api/products/compare?name=atum` | Pesquisa por palavras/prefixos, marca e código de barras; sem acentos, ordenada por relevância |
 | `GET` | `/api/products/:id` | Produto + histórico de preços (30 dias) |
 | `GET` | `/api/sync` | Sincronização incremental: `?last_pulled_at=...&limit=5000` |
 | `POST` | `/api/scrape` | Dispara recolha **atual** (header `x-scrape-secret`) |
@@ -175,7 +178,7 @@ curl "localhost:3000/api/sync?last_pulled_at=1970-01-01T00:00:00.000Z&limit=5000
 
 ## 🕵️ Análise dos scrapers
 
-Cada scraper usa a **fonte mais fiável** de cada site — as APIs internas que o próprio site serve à UI. Todos respeitam pausas (`sleep 0.3–0.5s`), usam retry com backoff exponencial e marcam "esgotado" **apenas** em recolhas completas.
+Cada scraper usa a **fonte mais fiável** de cada site — as APIs internas que o próprio site serve à UI. Os coletores respeitam pausas e retries limitados. Páginas vazias, repetidas ou truncadas são reportadas como recolha parcial. A retirada por ausência exige cobertura completa e uma opção explícita do coletor; folhetos e subconjuntos não apagam o catálogo.
 
 | Supermercado | Fonte | Detalhe |
 |---|---|---|
@@ -183,12 +186,14 @@ Cada scraper usa a **fonte mais fiável** de cada site — as APIs internas que 
 | 🔵 **Lidl** | JSON API interna `/q/api/search` | `gridbox.data`; paginação até `numFound`; só expõe a oferta semanal |
 | 🟢 **Pingo Doce** | Demandware/SFCC `Search-UpdateGrid` | JSON `data-gtm-info`; 12 categorias curadas |
 | 🔷 **Aldi** | Folheto iPaper (`__NEXT_DATA__`) | `pageTexts` + regex de preços; `external_id` determinístico |
+| 🟣 **Froiz** | API pública `serviciospt.froiz.com/api` | Descoberta dinâmica de categorias, paginação verificada, preço/unidade e propriedades publicadas |
 | 🔴 **Auchan** | Demandware/SFCC `Search-UpdateGrid` | JSON `data-gtm`; 23 categorias curadas, 100 produtos/página |
 
-### ⛔ Supermercados não suportados
+### Fontes adicionais e limites
 
-- **Intermarché** — todo o site (www + api) está protegido pelo anti-bot **DataDome** (challenge JS + captcha); qualquer pedido de um IP de datacenter devolve 403. Exigiria browser real + IP residencial.
-- **Mercadona** — **não tem loja online em Portugal** (73 lojas físicas; o online é exclusivo de Espanha em `tienda.mercadona.es`).
+O Intermarché tem campanhas públicas visíveis num browser normal, mas os testes HTTP e Chromium headless devolveram 403. O coletor opcional exige campanhas explícitas e não contorna restrições; não faz parte da recolha diária padrão.
+
+Mercadona, El Corte Inglés, Minipreço, E.Leclerc, Amanhecer e SPAR estão registados para importações de preços portugueses observados, recibos transcritos ou exports autorizados. Não se afirma cobertura automática onde não foi verificada uma fonte utilizável. Ver [fontes e limites por cadeia](docs/retailer-sources.md).
 
 ---
 
@@ -260,21 +265,21 @@ docker exec pricescoutpt_db psql -U postgres -d pricescoutpt -c \
 │       └── model/          # Schema WatermelonDB v4
 ├── deploy/azure/deploy.sh  # Deploy free-tier automático (BYO DB ou autónomo)
 ├── docs/                   # Documentação adicional (auditoria de produção)
-└── .github/workflows/      # daily-scrape.yml (recolha diária às 13:00)
+└── .github/workflows/      # daily-scrape.yml (recolha diária às 12:00 UTC)
 ```
 
 ---
 
-## ☁️ Deploy no Azure (100% gratuito)
+## ☁️ Deploy no Azure
 
-| Serviço | Plano | Custo |
+| Serviço | Configuração mínima | Custos/limites |
 |---|---|---|
-| **Azure Container Apps** (API + scraper num contentor) | Free plan — 180k vCPU-s, 360k GiB-s, 2M requests/mês | 0 € |
-| **Azure Database for PostgreSQL Flexible Server** | Free tier — B1ms, 32 GB, 750 h/mês | 0 € |
-| **Docker Hub** (imagem) | Plano gratuito | 0 € |
-| **GitHub Actions** (recolha diária — 1 job curl/dia) | 2.000 min/mês (repos privados) | 0 € |
+| **Azure Container Apps** (API + runtime do scraper) | Consumption, 0,5 CPU / 1 GiB, 0–1 réplicas | Franquias mensais partilhadas por subscrição; excesso pode ser cobrado |
+| **Azure Database for PostgreSQL Flexible Server** | B1ms, 32 GB | Benefício de 12 meses sujeito à elegibilidade/período restante |
+| **Docker Hub** (imagem) | Plano gratuito elegível | Confirmar limites da conta |
+| **GitHub Actions** (scrapers Python no runner) | Uma recolha diária, até 180 minutos por execução | Consumo depende da duração e do plano/visibilidade do repositório |
 
-> 📌 **Nota:** o `westeurope` rejeita clientes novos para PostgreSQL Flexible Server e Log Analytics — usar **`northeurope`**.
+Consulta os limites oficiais de [Container Apps](https://learn.microsoft.com/en-us/azure/container-apps/billing) e da oferta [Azure for Students](https://azure.microsoft.com/en-us/free/students/). A disponibilidade de regiões e SKUs deve ser verificada na subscrição; não há garantia geral de custo zero. A operação, validação e atualização estão descritas em [docs/azure-multi-user.md](docs/azure-multi-user.md).
 
 ### Deploy automático
 
@@ -283,7 +288,7 @@ az login
 ./deploy/azure/deploy.sh pricescoutpt-rg northeurope <user>/pricescoutpt-api:v1
 ```
 
-O script faz tudo: cria o grupo, instala a extensão `containerapp`, cria o ambiente, o PostgreSQL, aplica o schema, constrói/publica a imagem (Node + Python num contentor) e cria o Container App **com escala-a-zero** (`--min-replicas 0 --max-replicas 1`).
+Este script é um provisionador legado para uma instalação inicial: cria recursos, aplica o schema e publica a imagem. Não é um procedimento de atualização de produção; imprime credenciais e deve ser revisto antes de uso. Para recursos existentes, preserva configurações/segredos e atualiza a imagem depois das migrações descritas em [docs/data-collection.md](docs/data-collection.md).
 
 Duas modalidades:
 - **BYO DB** — passa `DATABASE_URL` como env ao script e ele salta a criação do PostgreSQL (útil para o free tier criado no portal).
@@ -294,12 +299,13 @@ Duas modalidades:
 
 ## 📅 Recolha diária automática
 
-`.github/workflows/daily-scrape.yml` corre os scrapers Python **diretamente no runner do GitHub Actions** todos os dias às 12:00 UTC (~13:00 em Portugal) e escreve na base de dados da Azure. O runner é fiável — nunca "dorme", ao contrário do container gratuito que escala para zero e mata recolhas longas (Continente ~30 min). Adiciona o segredo no GitHub (*Settings → Secrets → Actions*):
+`.github/workflows/daily-scrape.yml` corre os seis scrapers HTTP **diretamente no runner do GitHub Actions** todos os dias às 12:00 UTC (12:00 em Portugal no inverno, 13:00 no verão) e escreve na base de dados da Azure. Isto evita depender do tempo de vida do contentor da API durante recolhas longas. Adiciona o segredo no GitHub (*Settings → Secrets → Actions*):
 
 - `PRICESCOUTPT_DATABASE_URL` — ligação ao PostgreSQL da Azure (ex: `postgres://user:pass@pricescoutpt.postgres.database.azure.com:5432/postgres?sslmode=require`)
-- *(opcional)* `DISCORD_WEBHOOK_URL` / `SLACK_WEBHOOK_URL` — alertas no fim da recolha.
 
-Podes também disparar manualmente por *Actions → Recolha Diária de Preços → Run workflow*.
+Podes também disparar manualmente por *Actions → Recolha Diária de Preços → Run workflow*, escolhendo um coletor, `Froiz,Aldi` para uma recolha inicial curta ou `all`. A recolha diária enriquece até 100 páginas de detalhe por coletor; o modo manual permite 0, 25, 100 ou 250. O workflow tem um limite de 180 minutos, não envia webhooks e partilha um grupo de concorrência entre execuções agendadas e manuais, sem cancelar a recolha em curso.
+
+Usa a branch `main` nos disparos manuais. A autenticação OIDC usa as variáveis não secretas `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `AZURE_RESOURCE_GROUP` e `AZURE_POSTGRES_SERVER`. Cada execução permite apenas o IPv4 do seu runner na firewall do PostgreSQL e remove a regra no fim; vê [configuração e permissões](docs/azure-multi-user.md).
 
 ---
 
@@ -360,7 +366,7 @@ Antes de abrir o PR, certifica-te de que:
 ## ❓ FAQ
 
 **Os preços estão sempre atualizados?**
-A app usa o catálogo em cache (offline). O servidor recolhe os preços automaticamente todos os dias às ~13:00; usa o botão *Sincronizar* no painel de definições (ou o ícone de sincronização no topo) para descarregar a última recolha — o painel mostra a hora da recolha mais recente.
+A app usa o catálogo em cache (offline). O workflow recolhe os preços automaticamente todos os dias às 12:00 UTC; usa o botão *Sincronizar* no painel de definições (ou o ícone de sincronização no topo) para descarregar a última recolha — o painel mostra a hora da recolha mais recente.
 
 **Quanto pesa o catálogo no telemóvel?**
 ~57 mil produtos ≈ 20–30 MB no SQLite local. A sincronização é feita em lotes de 5.000 para nunca estoirar a memória.
@@ -375,7 +381,7 @@ O Auchan foi integrado recentemente; basta a próxima recolha diária correr par
 Os preços aqui mostrados são de **referência nacional** — os catálogos online dos supermercados (e os folhetos do Lidl/Aldi) têm preços nacionais. Na loja física, os preços podem variar por região: segundo estudos da DECO, o **interior** tende a ser mais caro e os **Açores e a Madeira** são as regiões onde menos se poupa. A app mostra essa nota nos ecrãs de comparação e painel de controlo.
 
 **Quanto custa isto em produção?**
-0 € — escala-a-zero nos Container Apps (dorme quando não há pedidos), free tier do PostgreSQL e GitHub Actions gratuito.
+Depende dos benefícios ativos da subscrição, do tráfego e dos minutos do GitHub Actions. A configuração mínima usa escala-a-zero e PostgreSQL B1ms/32 GB; confirma elegibilidade, consumo e crédito no Azure antes de assumir custo zero. Vê [operação no Azure](docs/azure-multi-user.md).
 
 ---
 

@@ -8,7 +8,7 @@ import Constants from 'expo-constants';
 // fixo: pode ser substituído em runtime (Definições → Servidor) por um
 // endpoint próprio/self-hosted, sem reconstruir a app (ver setApiBaseUrl).
 export const DEFAULT_API_BASE_URL =
-  'https://pricescoutpt-api.yellowflower-63c75e19.northeurope.azurecontainerapps.io';
+  'https://pricescoutpt-api.whitebay-deadf40d.spaincentral.azurecontainerapps.io';
 
 const SERVER_URL_KEY = '@api_base_url';
 

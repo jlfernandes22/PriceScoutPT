@@ -1,10 +1,7 @@
 import json
 import re
-import time
 import unicodedata
-from urllib.parse import urljoin
 
-import requests
 from bs4 import BeautifulSoup
 
 from scraper_base import ScraperBase
@@ -18,7 +15,6 @@ class ContinenteScraper(ScraperBase):
 
     def __init__(self, db_manager):
         super().__init__(db_manager)
-        self.session = requests.Session()
         self.session.headers.update({
             'User-Agent': (
                 'Mozilla/5.0 (X11; Linux x86_64) '
@@ -80,65 +76,7 @@ class ContinenteScraper(ScraperBase):
         ]
 
     def scrape_category(self, category):
-        cgid = category.get('cgid')
-        if not cgid:
-            cgid = category.get('path', '').strip('/')
-            
-        if not cgid:
-            raise ValueError('Categoria inválida para Continente')
-
-        print(f"A extrair categoria via API (Requests): {category['name']} (cgid: {cgid})")
-        
-        products = []
-        start = 0
-        seen_ids = set()
-        page_num = 1
-        
-        while True:
-            params = {
-                'cgid': cgid,
-                'start': start,
-                'sz': self.page_size,
-            }
-            try:
-                response = self.get_with_retry(self.ajax_url, params=params, timeout=30)
-            except Exception as e:
-                err = f"Continente ({category['name']}, pág {page_num}): {e}"
-                print(f"    Erro de rede na página {page_num}: {e}")
-                self.scrape_errors.append(err)
-                break
-
-            html = response.text
-            page_products = self._extract_products(html, category)
-            
-            if not page_products:
-                print(f"    Página {page_num} vazia. Fim da categoria.")
-                break
-
-            new_products_count = 0
-            for p in page_products:
-                eid = p.get('external_id')
-                if eid and eid not in seen_ids:
-                    seen_ids.add(eid)
-                    products.append(p)
-                    new_products_count += 1
-            
-            print(f"    Página {page_num}: recebidos {len(page_products)} produtos ({new_products_count} novos).")
-            
-            if new_products_count == 0:
-                print("    Nenhum produto novo extraído (ciclo duplicado detetado). A interromper.")
-                break
-                
-            if page_num >= 400:
-                print("    Limite máximo de 400 páginas alcançado.")
-                break
-                
-            page_num += 1
-            start += self.page_size
-            time.sleep(0.5)  # Pausa ligeira para proteger a API
-            
-        print(f"    ✓ Total {len(products)} produtos coletados em {category['name']}")
-        return products
+        return self._scrape_sfcc_category(category, '.product-tile')
 
     def _extract_products(self, html, category):
         soup = BeautifulSoup(html, 'html.parser')
@@ -159,7 +97,8 @@ class ContinenteScraper(ScraperBase):
             impression_data = tile.get('data-product-tile-impression') or product_wrapper.get('data-product-tile-impression')
             if impression_data:
                 try:
-                    impression = json.loads(impression_data)
+                    impression = self._json(impression_data)
+                    impression = impression if isinstance(impression, dict) else None
                 except Exception:
                     impression = None
 
@@ -184,7 +123,7 @@ class ContinenteScraper(ScraperBase):
                 name = impression.get('name') or name
                 brand = impression.get('brand') or brand
                 try:
-                    price = float(impression.get('price', 0.0) or 0.0)
+                    price = self._parse_price(impression.get('price'))
                 except (TypeError, ValueError):
                     price = 0.0
                 impression_category = impression.get('category') or ''
@@ -192,7 +131,7 @@ class ContinenteScraper(ScraperBase):
                 impression_category = ''
 
             if not name:
-                name = self._text(tile.select_one('h2, h3, .product-title, .product-name'))
+                name = self._text(tile.select_one('h2, h3, .pwc-tile--description, .product-title, .product-name'))
             if not brand:
                 brand = self._text(tile.select_one('.product-brand, .brand-name, .pwc-tile--brand'))
             if price == 0.0:
@@ -213,9 +152,14 @@ class ContinenteScraper(ScraperBase):
             # Categoria: hierarquia "Mercearia/Conservas/Atum" -> nível principal
             category_name = category.get('name')
             if impression_category:
-                category_name = impression_category.split('/')[0].strip()
+                hierarchy = [part.strip() for part in impression_category.split('/') if part.strip()]
+                hierarchy = [part for part in hierarchy if part.lower() not in ('supermercado', 'continente', 'home')]
+                category_name = hierarchy[0] if hierarchy else category_name
 
-            extracted.append({
+            if not name:
+                continue
+
+            extracted.append(self._enrich_product({
                 'category_id': None,
                 'category_name': category_name,
                 'external_id': str(external_id),
@@ -227,33 +171,11 @@ class ContinenteScraper(ScraperBase):
                 'unit': unit,
                 'url': url,
                 'image_url': image_url,
-                'in_stock': True,
+                'in_stock': price > 0 and not bool(tile.select_one('.product-unavailable, .out-of-stock')),
                 'deleted': False,
                 'last_scraped_at': None,
-            })
+            }, card=tile, unit_price_text=self._text(tile.select_one('.pwc-tile--price-secondary, .price-per-unit')), metadata={
+                'source_category_path': impression_category.split('/') if impression_category else [category_name],
+            }))
 
         return extracted
-
-
-
-
-    def _extract_image(self, card):
-        # A primeira imagem do tile pode ser um badge promocional (pvpr.png).
-        # A imagem real do produto vive em .ct-tile-image / .product-tile-image.
-        image = (
-            card.select_one('img.ct-tile-image') or
-            card.select_one('picture img') or
-            card.select_one('.product-tile-image img') or
-            card.select_one('img')
-        )
-        if not image:
-            return None
-        url = image.get('src') or image.get('data-src')
-        if not url or 'badges' in url:
-            # Fallback: procurar a primeira imagem que não seja um badge
-            for img in card.find_all('img'):
-                candidate = img.get('src') or img.get('data-src')
-                if candidate and 'badges' not in candidate:
-                    url = candidate
-                    break
-        return url

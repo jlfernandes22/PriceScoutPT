@@ -1,10 +1,5 @@
-import json
 import re
-import time
-import html as html_module
-from urllib.parse import urljoin
 
-import requests
 from bs4 import BeautifulSoup
 
 from scraper_base import ScraperBase
@@ -59,62 +54,7 @@ class AuchanScraper(ScraperBase):
         ]
 
     def scrape_category(self, category):
-        cgid = category.get('cgid')
-        if not cgid:
-            print(f"    Pular {category['name']} (Sem cgid)")
-            return []
-
-        print(f"A extrair categoria via API (Requests): {category['name']} (cgid: {cgid})")
-
-        products = []
-        start = 0
-        seen_ids = set()
-        page_num = 1
-
-        while True:
-            params = {
-                'cgid': cgid,
-                'start': start,
-                'sz': self.page_size,
-            }
-            try:
-                response = self.get_with_retry(self.ajax_url, params=params, timeout=30)
-            except Exception as e:
-                err = f"Auchan ({category['name']}, pág {page_num}): {e}"
-                print(f"    Erro de rede na página {page_num}: {e}")
-                self.scrape_errors.append(err)
-                break
-
-            page_products = self._extract_products(response.text, category)
-
-            if not page_products:
-                print(f"    Página {page_num} vazia. Fim da categoria.")
-                break
-
-            new_products_count = 0
-            for p in page_products:
-                eid = p.get('external_id')
-                if eid and eid not in seen_ids:
-                    seen_ids.add(eid)
-                    products.append(p)
-                    new_products_count += 1
-
-            print(f"    Página {page_num}: recebidos {len(page_products)} produtos ({new_products_count} novos).")
-
-            if new_products_count == 0:
-                print("    Nenhum produto novo extraído (ciclo duplicado detetado). A interromper.")
-                break
-
-            if page_num >= 400:
-                print("    Limite máximo de 400 páginas alcançado.")
-                break
-
-            page_num += 1
-            start += self.page_size
-            time.sleep(0.5)
-
-        print(f"    ✓ Total {len(products)} produtos coletados em {category['name']}")
-        return products
+        return self._scrape_sfcc_category(category, '.product-tile')
 
     def _extract_products(self, html_text, category):
         soup = BeautifulSoup(html_text, 'html.parser')
@@ -130,15 +70,14 @@ class AuchanScraper(ScraperBase):
 
     def _extract_card(self, tile, category):
         external_id = tile.get('data-pid') or tile.get('data-product-id')
-        if not external_id:
-            return None
-        external_id = str(external_id).strip()
+        external_id = str(external_id).strip() if external_id else None
 
         gtm = None
         gtm_el = tile.get('data-gtm') or tile.get('data-gtm-new')
         if gtm_el:
             try:
-                gtm = json.loads(html_module.unescape(gtm_el))
+                gtm = self._json(gtm_el)
+                gtm = gtm if isinstance(gtm, dict) else None
             except Exception:
                 gtm = None
 
@@ -155,15 +94,19 @@ class AuchanScraper(ScraperBase):
             name = gtm.get('name') or gtm.get('item_name') or name
             brand = gtm.get('brand') or gtm.get('item_brand') or brand
             try:
-                price = float(gtm.get('price', 0.0) or 0.0)
+                price = self._parse_price(gtm.get('price'))
             except (TypeError, ValueError):
                 price = 0.0
 
+        if not external_id and gtm:
+            external_id = str(gtm.get('id') or gtm.get('item_id') or '').strip()
+        if not external_id:
+            return None
         if not name:
             name = self._text(tile.select_one('.auc-product-tile__name, .pdp-link, h2, h3'))
 
         if price == 0.0:
-            price_el = tile.select_one('.price, .auc-product-tile__price, .sales .value')
+            price_el = tile.select_one('.sales .value, .sales, .auc-product-tile__price')
             if price_el and price_el.get('content'):
                 try:
                     price = float(price_el.get('content'))
@@ -176,7 +119,10 @@ class AuchanScraper(ScraperBase):
         if price == 0.0:
             unavailable = True
 
-        return {
+        if not name:
+            return None
+
+        return self._enrich_product({
             'category_id': None,
             'category_name': category_name,
             'external_id': external_id,
@@ -191,23 +137,18 @@ class AuchanScraper(ScraperBase):
             'in_stock': not unavailable,
             'deleted': False,
             'last_scraped_at': None,
-        }
+        }, card=tile, unit_price_text=self._text(tile.select_one('.auc-measures--price-per-unit')), metadata={
+            'source_category_path': (gtm.get('category') or '').split('/') if gtm else [category_name],
+        })
 
     def _extract_unit(self, tile):
-        unit_el = tile.select_one('.auc-measures--price-per-unit, .pwc-tile--quantity, .product-quantity')
+        unit_el = tile.select_one('.pwc-tile--quantity, .product-quantity')
         if unit_el:
             unit_text = unit_el.get_text(strip=True)
             if unit_text and not unit_text.lower().startswith('preço'):
                 return unit_text
-        return None
-
-
-
-
-    def _extract_image(self, tile):
-        image = tile.select_one('img[data-src]') or tile.find('img')
-        if image:
-            url = image.get('data-src') or image.get('src')
-            if url and 'wishlist' not in url:
-                return url
-        return None
+        # The listing only publishes unit price; infer a package size only when
+        # explicitly present in the title, never store €/kg as the package size.
+        title = self._text(tile.select_one('.auc-product-tile__name, .pdp-link, h2, h3')) or ''
+        match = re.search(r'\b(\d+(?:[.,]\d+)?\s*(?:kg|gr|g|ml|cl|l))\b', title, re.I)
+        return match.group(1) if match else None

@@ -1,22 +1,23 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef, memo } from 'react';
 import { View, StyleSheet, FlatList, ScrollView, Keyboard } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Searchbar, Text, IconButton, Portal, Dialog, Button, TextInput, RadioButton, Surface, Chip, Icon, Snackbar } from 'react-native-paper';
+import { Searchbar, Text, IconButton, Portal, Dialog, Button, TextInput, RadioButton, Surface, Chip, Icon, Snackbar, Menu, ActivityIndicator } from 'react-native-paper';
 import { Q } from '@nozbe/watermelondb';
 import withObservables from '@nozbe/with-observables';
 import { database } from '../model';
 import { syncDatabase } from '../services/sync';
 import ProductHistoryModal from '../components/ProductHistoryModal';
 import SettingsModal from '../components/SettingsModal';
-import ProductCard, { SUPERMARKET_BRANDS, getSupermarket } from '../components/ProductCard';
+import ProductCard, { getSupermarket } from '../components/ProductCard';
 import { colors } from '../theme';
+import { useProductSearch } from '../utils/useProductSearch';
 
 const ALL_SUPERMARKETS = 'all';
 
 const ProductList = memo(function ProductList({
-  products,
   searchTerm,
   categories,
+  supermarkets,
   selectedSupermarket,
   selectedCategoryId,
   onSupermarketChange,
@@ -28,28 +29,44 @@ const ProductList = memo(function ProductList({
   favoriteIds,
   onToggleFavorite,
   onLoadMore,
+  limit,
+  sortOrder,
+  onSortChange,
+  includeLoyalty,
+  onLoyaltyChange,
+  isTyping,
+  onClearFilters,
 }) {
   const [showAllCategories, setShowAllCategories] = useState(false);
-
-  // Relevância dentro da página: produtos cujo nome COMEÇA pelo termo pesquisado
-  // aparecem primeiro ("leite" → "Leite Magro" antes de "Bola de Berlim Doce de
-  // Leite"). A ordenação SQL é alfabética; este passe é estável e barato (≤60 itens).
-  const sortedProducts = useMemo(() => {
-    const term = (searchTerm || '').trim().toLowerCase();
-    if (!term) return products;
-    return [...products].sort((a, b) => {
-      const aStarts = a.name.toLowerCase().startsWith(term) ? 0 : 1;
-      const bStarts = b.name.toLowerCase().startsWith(term) ? 0 : 1;
-      if (aStarts !== bStarts) return aStarts - bStarts;
-      return a.name.localeCompare(b.name, 'pt-PT');
-    });
-  }, [products, searchTerm]);
+  const [sortMenuVisible, setSortMenuVisible] = useState(false);
+  const listRef = useRef(null);
+  const { products, total, approximate, loading, error, retry, supermarketIds, categoryIds } = useProductSearch(searchTerm, {
+    supermarketId: selectedSupermarket, categoryId: selectedCategoryId,
+    sort: sortOrder, limit, includeLoyalty,
+  });
+  const hasFilters = selectedSupermarket !== ALL_SUPERMARKETS || !!selectedCategoryId || includeLoyalty;
+  const busy = loading || isTyping;
+  const sortLabels = { relevance: 'Relevância', name: 'Nome A–Z', price_asc: 'Preço: menor primeiro', price_desc: 'Preço: maior primeiro' };
+  const availableSupermarkets = useMemo(() => {
+    const known = new Map((supermarkets || []).map((store) => [store.id, store.name]));
+    return [...supermarketIds].map((id) => ({ id, ...getSupermarket(id), name: known.get(id) || getSupermarket(id).name }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'pt-PT'));
+  }, [supermarkets, supermarketIds]);
 
   const visibleCategories = useMemo(() => {
     // As categorias são canónicas (globais) — aplicam-se a todos os supermercados.
-    const sorted = [...categories].sort((a, b) => a.name.localeCompare(b.name));
-    return showAllCategories ? sorted : sorted.slice(0, 8);
-  }, [categories, showAllCategories]);
+    const sorted = categories.filter((category) => categoryIds.has(category.id) || category.id === selectedCategoryId)
+      .sort((a, b) => a.name.localeCompare(b.name, 'pt-PT'));
+    if (showAllCategories) return sorted;
+    const visible = sorted.slice(0, 8);
+    const selected = sorted.find((category) => category.id === selectedCategoryId);
+    if (selected && !visible.some((category) => category.id === selected.id)) visible.push(selected);
+    return visible;
+  }, [categories, showAllCategories, categoryIds, selectedCategoryId]);
+
+  useEffect(() => {
+    listRef.current?.scrollToOffset({ offset: 0, animated: false });
+  }, [searchTerm, selectedSupermarket, selectedCategoryId, sortOrder, includeLoyalty]);
 
   const renderItem = useCallback(
     ({ item }) => (
@@ -61,7 +78,9 @@ const ProductList = memo(function ProductList({
         onPress={() => onViewHistory(item)}
       />
     ),
-    [favoriteIds, onToggleFavorite, onAddToBasket, onViewHistory]
+    // Watermelon Models keep their object identity when fields change. A new
+    // observed page must also refresh the FlatList cells after a price sync.
+    [favoriteIds, onToggleFavorite, onAddToBasket, onViewHistory, products]
   );
 
   return (
@@ -80,7 +99,7 @@ const ProductList = memo(function ProductList({
           >
             Todos
           </Chip>
-          {Object.entries(SUPERMARKET_BRANDS).map(([id, info]) => (
+          {availableSupermarkets.map(({ id, ...info }) => (
             <Chip
               key={id}
               selected={selectedSupermarket === id}
@@ -145,29 +164,69 @@ const ProductList = memo(function ProductList({
         </View>
       )}
 
+      <View style={styles.searchControls}>
+        <Menu
+          visible={sortMenuVisible}
+          onDismiss={() => setSortMenuVisible(false)}
+          anchor={<Button compact icon="sort" onPress={() => setSortMenuVisible(true)} accessibilityLabel={`Ordenar produtos. ${sortLabels[sortOrder]}`}>{sortLabels[sortOrder]}</Button>}
+        >
+          {Object.entries(sortLabels).map(([value, label]) => (
+            <Menu.Item key={value} title={label} leadingIcon={sortOrder === value ? 'check' : undefined} onPress={() => { onSortChange(value); setSortMenuVisible(false); }} />
+          ))}
+        </Menu>
+        {hasFilters && <Button compact onPress={onClearFilters}>Limpar filtros</Button>}
+      </View>
+      <View style={styles.loyaltyControl}>
+        <Chip compact selected={includeLoyalty} icon={includeLoyalty ? 'check' : 'card-account-details-outline'}
+          onPress={() => onLoyaltyChange(!includeLoyalty)} accessibilityState={{ selected: includeLoyalty }}
+          textStyle={styles.loyaltyText} style={styles.loyaltyChip}>
+          Incluir preços com cartão
+        </Chip>
+      </View>
+      <View style={styles.resultsBar} accessibilityLiveRegion="polite">
+        {busy && <ActivityIndicator size={14} style={styles.searchSpinner} />}
+        <Text variant="bodySmall" style={styles.resultsText}>
+          {busy ? 'A pesquisar no catálogo guardado…' : `${total.toLocaleString('pt-PT')} ${total === 1 ? 'produto' : 'produtos'}${approximate ? ' · Resultados aproximados' : ''}`}
+          {!busy && (sortOrder === 'price_asc' || sortOrder === 'price_desc') ? ' · Preço por embalagem' : ''}
+        </Text>
+      </View>
+
       <FlatList
-        data={sortedProducts}
+        ref={listRef}
+        data={isTyping ? [] : products}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
         contentContainerStyle={styles.listContainer}
         refreshing={refreshing}
         onRefresh={onRefresh}
         keyboardShouldPersistTaps="handled"
-        onEndReached={onLoadMore}
+        onEndReached={() => { if (!busy && products.length < total) onLoadMore(); }}
         onEndReachedThreshold={0.5}
         initialNumToRender={10}
         maxToRenderPerBatch={12}
         windowSize={7}
         updateCellsBatchingPeriod={80}
+        keyboardDismissMode="on-drag"
+        ListFooterComponent={products.length > 0 && !isTyping ? (
+          <View style={styles.listFooter}>
+            <Text variant="bodySmall" style={styles.resultsText}>{products.length} de {total.toLocaleString('pt-PT')} produtos</Text>
+            {products.length < total && <Button loading={loading} onPress={onLoadMore}>Mostrar mais</Button>}
+          </View>
+        ) : null}
         ListEmptyComponent={() => (
           <View style={styles.emptyContainer}>
-            <IconButton icon="magnify-minus" size={60} iconColor={colors.borderStrong} />
+            <IconButton icon={busy ? 'database-search-outline' : error ? 'alert-circle-outline' : 'magnify-minus'} size={60} iconColor={colors.borderStrong} />
             <Text variant="titleMedium" style={styles.emptyText}>
-              Nenhum produto encontrado.
+              {busy ? 'A preparar os resultados…' : error ? 'Pesquisa indisponível' : 'Nenhum produto encontrado.'}
             </Text>
             <Text variant="bodyMedium" style={styles.emptySubtext}>
-              Pesquisa por outro termo ou faz Swipe Down para atualizar o catálogo.
+              {busy ? 'A pesquisa funciona sem ligação à internet.' : error || (searchTerm.trim()
+                ? `Não encontrámos “${searchTerm.trim()}”. Experimenta o nome, a marca ou o código de barras.`
+                : 'Experimenta remover os filtros ou atualizar o catálogo para receber os preços disponíveis.')}
             </Text>
+            {!busy && error && <Button onPress={retry}>Tentar novamente</Button>}
+            {!busy && !error && hasFilters && <Button onPress={onClearFilters}>Pesquisar em todos os supermercados</Button>}
+            {!busy && !error && !searchTerm.trim() && !hasFilters && <Button onPress={onRefresh}>Atualizar catálogo</Button>}
           </View>
         )}
       />
@@ -176,42 +235,14 @@ const ProductList = memo(function ProductList({
 });
 
 const PAGE_SIZE = 60;
-const MAX_LIST_RESULTS = 60000;
 
-const enhanceList = withObservables(
-  ['searchTerm', 'selectedSupermarket', 'selectedCategoryId', 'limit'],
-  ({ searchTerm, selectedSupermarket, selectedCategoryId, limit }) => {
-    const conditions = [
-      Q.where('in_stock', true),
-      Q.where('deleted', false),
-    ];
-
-    if (searchTerm && searchTerm.trim().length > 0) {
-      conditions.push(Q.where('name', Q.like(`%${Q.sanitizeLikeString(searchTerm.trim())}%`)));
-    }
-    if (selectedSupermarket && selectedSupermarket !== ALL_SUPERMARKETS) {
-      conditions.push(Q.where('supermarket_id', selectedSupermarket));
-    }
-    if (selectedCategoryId) {
-      conditions.push(Q.where('category_id', selectedCategoryId));
-    }
-    // Ordenação estável por nome: sem isto a ordem era a "natural" do SQLite,
-    // instável entre sincronizações e sem qualquer relação com o termo pesquisado.
-    conditions.push(Q.sortBy('name', Q.asc));
-    conditions.push(Q.take(Math.min(limit, MAX_LIST_RESULTS)));
-
-    return {
-      products: database.collections.get('products').query(...conditions).observe(),
-    };
-  }
-);
-const EnhancedProductList = enhanceList(ProductList);
-
-const SearchScreen = ({ shoppingLists, favorites, categories, onResetDatabase }) => {
+const SearchScreen = ({ shoppingLists, favorites, categories, supermarkets, onResetDatabase }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [selectedSupermarket, setSelectedSupermarket] = useState(ALL_SUPERMARKETS);
   const [selectedCategoryId, setSelectedCategoryId] = useState(null);
+  const [sortOrder, setSortOrder] = useState('relevance');
+  const [includeLoyalty, setIncludeLoyalty] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [syncTrigger, setSyncTrigger] = useState(null);
   const [syncMessage, setSyncMessage] = useState('');
@@ -236,7 +267,7 @@ const SearchScreen = ({ shoppingLists, favorites, categories, onResetDatabase })
 
   const resetPagination = useCallback(() => setVisibleLimit(PAGE_SIZE), []);
   const handleLoadMore = useCallback(() => {
-    setVisibleLimit((prev) => Math.min(prev + PAGE_SIZE, MAX_LIST_RESULTS));
+    setVisibleLimit((prev) => prev + PAGE_SIZE);
   }, []);
 
   const favoriteIds = useMemo(() => {
@@ -260,9 +291,23 @@ const SearchScreen = ({ shoppingLists, favorites, categories, onResetDatabase })
 
   const onChangeSearch = (query) => {
     setSearchQuery(query);
-    resetPagination();
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-    searchTimerRef.current = setTimeout(() => setDebouncedQuery(query), 300);
+    if (!query.trim()) {
+      setDebouncedQuery('');
+      resetPagination();
+      return;
+    }
+    searchTimerRef.current = setTimeout(() => {
+      setDebouncedQuery(query);
+      resetPagination();
+    }, 250);
+  };
+
+  const submitSearch = () => {
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    setDebouncedQuery(searchQuery);
+    resetPagination();
+    Keyboard.dismiss();
   };
 
   const handleSync = useCallback(async (trigger = 'button') => {
@@ -372,6 +417,13 @@ const SearchScreen = ({ shoppingLists, favorites, categories, onResetDatabase })
     resetPagination();
   }, []);
 
+  const handleClearFilters = useCallback(() => {
+    setSelectedSupermarket(ALL_SUPERMARKETS);
+    setSelectedCategoryId(null);
+    setIncludeLoyalty(false);
+    resetPagination();
+  }, []);
+
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
@@ -413,11 +465,16 @@ const SearchScreen = ({ shoppingLists, favorites, categories, onResetDatabase })
         inputStyle={styles.searchbarInput}
         accessibilityLabel="Pesquisar produtos"
         accessibilityHint="Escreve o nome de um produto para filtrar a lista"
+        autoCorrect={false}
+        autoCapitalize="none"
+        returnKeyType="search"
+        onSubmitEditing={submitSearch}
       />
 
-      <EnhancedProductList
+      <ProductList
         searchTerm={debouncedQuery}
         categories={categories || []}
+        supermarkets={supermarkets || []}
         selectedSupermarket={selectedSupermarket}
         selectedCategoryId={selectedCategoryId}
         onSupermarketChange={handleChangeSupermarket}
@@ -430,6 +487,12 @@ const SearchScreen = ({ shoppingLists, favorites, categories, onResetDatabase })
         onToggleFavorite={handleToggleFavorite}
         limit={visibleLimit}
         onLoadMore={handleLoadMore}
+        isTyping={searchQuery.trim() !== debouncedQuery.trim()}
+        sortOrder={sortOrder}
+        onSortChange={(value) => { setSortOrder(value); resetPagination(); }}
+        includeLoyalty={includeLoyalty}
+        onLoyaltyChange={(value) => { setIncludeLoyalty(value); resetPagination(); }}
+        onClearFilters={handleClearFilters}
       />
 
       <ProductHistoryModal
@@ -615,6 +678,40 @@ const styles = StyleSheet.create({
     paddingTop: 0,
     paddingBottom: 24,
   },
+  searchControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 8,
+  },
+  loyaltyControl: {
+    paddingHorizontal: 16,
+    paddingBottom: 6,
+    alignItems: 'flex-start',
+  },
+  loyaltyChip: {
+    backgroundColor: colors.surfaceVariant,
+  },
+  loyaltyText: {
+    fontSize: 12,
+  },
+  resultsBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+  },
+  resultsText: {
+    color: colors.textMuted,
+    flexShrink: 1,
+  },
+  searchSpinner: {
+    marginRight: 6,
+  },
+  listFooter: {
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
   emptyContainer: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -714,5 +811,6 @@ const enhanceScreen = withObservables([], () => ({
   ).observe(),
   favorites: database.collections.get('favorites').query().observe(),
   categories: database.collections.get('categories').query().observe(),
+  supermarkets: database.collections.get('supermarkets').query().observe(),
 }));
 export default enhanceScreen(SearchScreen);

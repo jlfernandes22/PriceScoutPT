@@ -79,6 +79,22 @@ SOURCE_CATEGORY_MAP = {
         'Moda e Acessórios': 'desporto-e-brinquedos',
         'Bebé, Criança e Brinquedos': 'bebe-e-crianca',
     },
+    'froiz': {
+        'Animais': 'animais',
+        'Bebidas': 'bebidas',
+        'Charcutaria queijos e fatiados vegetais': 'charcutaria-e-queijos',
+        'Congelados': 'congelados',
+        'Frutas e legumes': 'frutas-e-vegetais',
+        'Halloween': 'promocoes',
+        'Higiene e limpeza': 'limpeza-e-casa',
+        'Infantil': 'bebe-e-crianca',
+        'Laticínios produtos vegetais e outros': 'laticinios-e-ovos',
+        'Mercearia': 'mercearia',
+        'Natal': 'promocoes',
+        'Padaria e pastelaria': 'padaria-e-pastelaria',
+        'Peixaria': 'peixaria',
+        'Talho': 'talho',
+    },
     'aldi': {
         'Oportunidades da Semana': 'promocoes',
     },
@@ -217,6 +233,7 @@ def _normalize(name):
     if name is None:
         return ''
     text = unicodedata.normalize('NFKD', str(name))
+    text = ''.join(char for char in text if not unicodedata.combining(char))
     text = text.replace('\u200b', '')
     text = re.sub(r'\s+', ' ', text)
     return text.strip().lower()
@@ -227,6 +244,9 @@ _NORMALIZED_MAP = {}
 for _supermarket, _mapping in SOURCE_CATEGORY_MAP.items():
     for _name, _slug in _mapping.items():
         _NORMALIZED_MAP[(_supermarket, _normalize(_name))] = _slug
+
+_CANONICAL_NAMES = {_normalize(name): slug for name, slug, _ in CANONICAL_CATEGORIES}
+_CANONICAL_NAMES.update({_normalize(slug): slug for _, slug, _ in CANONICAL_CATEGORIES})
 
 
 def get_canonical_categories():
@@ -240,4 +260,4 @@ def resolve_source_category(supermarket_slug, source_name):
     Devolve sempre um slug válido; sem correspondência devolve 'outros'.
     """
     key = (_normalize(supermarket_slug), _normalize(source_name))
-    return _NORMALIZED_MAP.get(key, DEFAULT_CATEGORY_SLUG)
+    return _NORMALIZED_MAP.get(key, _CANONICAL_NAMES.get(key[1], DEFAULT_CATEGORY_SLUG))

@@ -45,6 +45,14 @@ export const supermarketBrands = {
   pingodoce: '#2B8C3D',
   aldi: '#003A70',
   auchan: '#E4002B',
+  mercadona: '#008348',
+  intermarche: '#C62828',
+  elcorteingles: '#146735',
+  froiz: '#264575',
+  minipreco: '#C62828',
+  eleclerc: '#005AA7',
+  amanhecer: '#96531B',
+  spar: '#287340',
 };
 
 // Converte '#RRGGBB' + alpha em 'rgba(r, g, b, alpha)' — para gráficos e

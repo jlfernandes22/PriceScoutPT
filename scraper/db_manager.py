@@ -2,7 +2,7 @@ import os
 from datetime import datetime, timezone
 import psycopg2
 from psycopg2 import sql
-from psycopg2.extras import execute_values
+from psycopg2.extras import execute_values, Json
 
 # Tamanho dos lotes de escrita. O free tier (B1ms, 1 vCPU burstable) não
 # aguenta um único INSERT com 40k+ linhas (cada linha dispara o trigger
@@ -60,14 +60,14 @@ class DBManager:
         """Executa fn(conn). Em caso de ligação morta OU timeout (rede a "engolir"
         respostas, statement lento), força reconexão e tenta de novo uma vez."""
         try:
-            fn(self._ensure_conn())
+            return fn(self._ensure_conn())
         except (psycopg2.InterfaceError, psycopg2.OperationalError):
             try:
                 self.conn.close()
             except Exception:
                 pass
             self.conn = None
-            fn(self._ensure_conn())
+            return fn(self._ensure_conn())
 
     def ensure_canonical_categories(self):
         """Garante que a taxonomia canónica existe na BD (idempotente)."""
@@ -179,15 +179,24 @@ class DBManager:
 
     def bulk_upsert_products(self, supermarket_id, products):
         if not products:
-            return
+            return 0
 
-        # Deduplicate products by external_id before bulk upsert to avoid cardinality violations.
+        # One export can contain several dated receipts for the same SKU/store.
+        # Keep the latest observation even when the input is oldest-first.
         unique = {}
+        fallback_time = datetime.now(timezone.utc)
+        def observed_time(item):
+            value = item.get('observed_at') or item.get('last_scraped_at') or fallback_time
+            if isinstance(value, str):
+                value = datetime.fromisoformat(value.replace('Z', '+00:00'))
+            if value.tzinfo is None:
+                value = value.replace(tzinfo=timezone.utc)
+            return value
         for item in products:
             external_id = item.get('external_id')
             if not external_id:
                 continue
-            if external_id not in unique:
+            if external_id not in unique or observed_time(item) >= observed_time(unique[external_id]):
                 unique[external_id] = item
         products = list(unique.values())
 
@@ -196,26 +205,40 @@ class DBManager:
             INSERT INTO products (
               supermarket_id, category_id, external_id, name, brand, description,
               price, price_currency, unit, url, image_url, in_stock, deleted,
-              last_scraped_at, created_at, updated_at
+              last_scraped_at, created_at, updated_at,
+              barcode, regular_price, unit_price, unit_price_unit,
+              source_type, source_url, observed_at, requires_loyalty_card,
+              valid_from, valid_to, metadata, store_location
             ) VALUES %s
             ON CONFLICT (supermarket_id, external_id) DO UPDATE
-            SET category_id = EXCLUDED.category_id,
+            SET category_id = COALESCE(EXCLUDED.category_id, products.category_id),
                 name = EXCLUDED.name,
-                brand = EXCLUDED.brand,
-                description = EXCLUDED.description,
+                brand = COALESCE(EXCLUDED.brand, products.brand),
+                description = COALESCE(EXCLUDED.description, products.description),
                 price = EXCLUDED.price,
                 price_currency = EXCLUDED.price_currency,
-                unit = EXCLUDED.unit,
-                url = EXCLUDED.url,
-                image_url = EXCLUDED.image_url,
+                unit = COALESCE(EXCLUDED.unit, products.unit),
+                url = COALESCE(EXCLUDED.url, products.url),
+                image_url = COALESCE(EXCLUDED.image_url, products.image_url),
+                barcode = COALESCE(EXCLUDED.barcode, products.barcode),
+                regular_price = EXCLUDED.regular_price,
+                unit_price = EXCLUDED.unit_price,
+                unit_price_unit = EXCLUDED.unit_price_unit,
+                source_type = EXCLUDED.source_type,
+                source_url = EXCLUDED.source_url,
+                store_location = EXCLUDED.store_location,
+                observed_at = EXCLUDED.observed_at,
+                requires_loyalty_card = EXCLUDED.requires_loyalty_card,
+                valid_from = EXCLUDED.valid_from,
+                valid_to = EXCLUDED.valid_to,
+                metadata = products.metadata || EXCLUDED.metadata,
                 in_stock = EXCLUDED.in_stock,
                 deleted = EXCLUDED.deleted,
                 last_scraped_at = EXCLUDED.last_scraped_at,
                 updated_at = now()
-            WHERE products.price IS DISTINCT FROM EXCLUDED.price
-               OR products.name IS DISTINCT FROM EXCLUDED.name
-               OR products.brand IS DISTINCT FROM EXCLUDED.brand
-               OR products.in_stock IS DISTINCT FROM EXCLUDED.in_stock;
+            -- Older exports must never overwrite a newer price observation.
+            WHERE products.observed_at IS NULL
+               OR EXCLUDED.observed_at >= products.observed_at;
             """
         )
 
@@ -237,27 +260,44 @@ class DBManager:
             item.get('last_scraped_at') or now,
             item.get('created_at') or now,
             item.get('updated_at') or now,
+            item.get('barcode') or item.get('gtin'),
+            item.get('regular_price'),
+            item.get('unit_price'),
+            item.get('unit_price_unit'),
+            item.get('source_type', 'online_catalog'),
+            item.get('source_url') or item.get('url'),
+            item.get('observed_at') or item.get('last_scraped_at') or now,
+            item.get('requires_loyalty_card', (item.get('metadata') or {}).get('requires_loyalty_card', False)),
+            item.get('valid_from') or (item.get('metadata') or {}).get('valid_from'),
+            item.get('valid_to') or (item.get('metadata') or {}).get('valid_to'),
+            Json(item.get('metadata') or {}),
+            item.get('store_location'),
         ) for item in products]
 
         # Escrita em lotes: cada lote é um statement pequeno + commit. Se a BD
         # do free tier ficar sobrecarregada e fechar a ligação, apenas o lote
         # atual se perde — e a reconexão retoma nos seguintes.
+        written = 0
         for start in range(0, len(values), UPSERT_CHUNK_SIZE):
             chunk = values[start:start + UPSERT_CHUNK_SIZE]
 
             def _run(conn, chunk=chunk):
                 with conn.cursor() as cur:
-                    execute_values(cur, query.as_string(conn), chunk)
+                    execute_values(cur, query.as_string(conn), chunk, page_size=UPSERT_CHUNK_SIZE)
+                    count = cur.rowcount
                 conn.commit()
+                return count
 
             try:
-                self._retry_write(_run)
+                written += self._retry_write(_run)
             except Exception:
                 try:
                     self._ensure_conn().rollback()
                 except Exception:
                     pass
                 raise
+
+        return written
 
     def bulk_insert_price_history(self, price_records):
         if not price_records:
@@ -295,7 +335,7 @@ class DBManager:
                     pass
                 raise
 
-    def mark_missing_products(self, supermarket_id, scraped_external_ids):
+    def mark_missing_products(self, supermarket_id, scraped_external_ids, source_type='online_catalog'):
         def _run(conn):
             with conn.cursor() as cur:
                 if scraped_external_ids:
@@ -309,6 +349,7 @@ class DBManager:
                             deleted = true,
                             updated_at = now()
                         WHERE supermarket_id = %s
+                          AND source_type = %s
                           AND (deleted = false OR in_stock = true)
                           AND NOT EXISTS (
                               SELECT 1
@@ -316,7 +357,7 @@ class DBManager:
                               WHERE t.eid = external_id
                           )
                         """,
-                        (supermarket_id, list(scraped_external_ids))
+                        (supermarket_id, source_type, list(scraped_external_ids))
                     )
                 else:
                     cur.execute(
@@ -326,9 +367,10 @@ class DBManager:
                             deleted = true,
                             updated_at = now()
                         WHERE supermarket_id = %s
+                          AND source_type = %s
                           AND (deleted = false OR in_stock = true)
                         """,
-                        (supermarket_id,)
+                        (supermarket_id, source_type)
                     )
             conn.commit()
 

@@ -2,6 +2,7 @@ import React, { useState, useEffect, memo } from 'react';
 import { View, StyleSheet, Image } from 'react-native';
 import { colors, supermarketBrands } from '../theme';
 import { Card, Text, IconButton, Icon } from 'react-native-paper';
+import { formatUnitPrice } from '../utils/unitPrice';
 
 // Identidade visual dos supermercados (cores vivem em theme.js — fonte única)
 export const SUPERMARKET_BRANDS = {
@@ -10,6 +11,14 @@ export const SUPERMARKET_BRANDS = {
   '00000000-0000-0000-0000-000000000003': { name: 'Pingo Doce', color: supermarketBrands.pingodoce },
   '00000000-0000-0000-0000-000000000004': { name: 'Aldi', color: supermarketBrands.aldi },
   '00000000-0000-0000-0000-000000000005': { name: 'Auchan', color: supermarketBrands.auchan },
+  '00000000-0000-0000-0000-000000000006': { name: 'Mercadona', color: supermarketBrands.mercadona },
+  '00000000-0000-0000-0000-000000000007': { name: 'Intermarché', color: supermarketBrands.intermarche },
+  '00000000-0000-0000-0000-000000000008': { name: 'El Corte Inglés', color: supermarketBrands.elcorteingles },
+  '00000000-0000-0000-0000-000000000009': { name: 'Froiz', color: supermarketBrands.froiz },
+  '00000000-0000-0000-0000-000000000010': { name: 'Minipreço', color: supermarketBrands.minipreco },
+  '00000000-0000-0000-0000-000000000011': { name: 'E.Leclerc', color: supermarketBrands.eleclerc },
+  '00000000-0000-0000-0000-000000000012': { name: 'Amanhecer', color: supermarketBrands.amanhecer },
+  '00000000-0000-0000-0000-000000000013': { name: 'SPAR', color: supermarketBrands.spar },
 };
 
 export const getSupermarket = (id) =>
@@ -18,8 +27,36 @@ export const getSupermarket = (id) =>
 export const formatPrice = (price) => {
   const value = parseFloat(price);
   // Preço 0/ausente = produto sem preço (indisponível) — nunca mostrar "0,00 €".
-  return Number.isFinite(value) && value > 0 ? `${value.toFixed(2)} €` : '—';
+  return Number.isFinite(value) && value > 0 ? `${value.toFixed(2).replace('.', ',')} €` : '—';
 };
+
+const SOURCE_LABELS = {
+  online_catalog: 'Catálogo online',
+  public_listing: 'Ofertas públicas',
+  leaflet: 'Folheto',
+  manual: 'Preço observado',
+  receipt: 'Talão',
+  authorised_feed: 'Catálogo importado',
+};
+
+export function productUnitPrice(product) {
+  const value = Number(product.unitPrice);
+  if (Number.isFinite(value) && value > 0 && product.unitPriceUnit) {
+    const unit = String(product.unitPriceUnit).replace(/^€\s*\/?\s*/, '');
+    return `${value.toFixed(2).replace('.', ',')} €/${unit}`;
+  }
+  return formatUnitPrice(product.price, product.unit, product.name);
+}
+
+export function getProductSourceInfo(product) {
+  const source = SOURCE_LABELS[product.sourceType];
+  const location = product.storeLocation || (['manual', 'receipt'].includes(product.sourceType) ? 'Localização não indicada' : '');
+  const observed = product.observedAt || product.lastScrapedAt;
+  const date = observed && new Date(observed);
+  const parts = [source, location];
+  if ((source || location) && date && Number.isFinite(date.getTime())) parts.push(date.toLocaleDateString('pt-PT'));
+  return parts.filter(Boolean).join(' · ');
+}
 
 // Imagem do produto com fallback elegante para quando não existe imagem
 export const ProductImage = ({ url, color, size }) => {
@@ -66,6 +103,10 @@ const ProductCard = ({
 }) => {
   const brandInfo = getSupermarket(product.supermarketId);
   const imgSize = compact ? 56 : 72;
+  const unitPrice = productUnitPrice(product);
+  const regularPrice = Number(product.regularPrice);
+  const hasDiscount = regularPrice > Number(product.price) && Number(product.price) > 0;
+  const sourceInfo = getProductSourceInfo(product);
 
   return (
     <Card
@@ -73,7 +114,7 @@ const ProductCard = ({
       mode="outlined"
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={`${product.name}, ${formatPrice(product.price)}, ${brandInfo.name}`}
+      accessibilityLabel={`${product.name}, ${formatPrice(product.price)}, ${brandInfo.name}${product.requiresLoyaltyCard ? ', requer cartão de fidelização' : ''}${unitPrice ? `, ${unitPrice}` : ''}${sourceInfo ? `, ${sourceInfo}` : ''}`}
       accessibilityHint="Abre o histórico de preços do produto"
     >
       <View style={styles.row}>
@@ -89,16 +130,22 @@ const ProductCard = ({
             {product.brand ? product.brand : 'Marca própria'}
             {product.unit ? ` · ${product.unit}` : ''}
           </Text>
+          {product.requiresLoyaltyCard && <Text variant="labelSmall" style={styles.loyaltyLabel}>Preço com cartão</Text>}
           <View style={styles.bottomRow}>
             <View style={styles.badgeRow}>
               <View style={[styles.badge, { backgroundColor: brandInfo.color }]}>
                 <Text style={styles.badgeText}>{brandInfo.name}</Text>
               </View>
             </View>
-            <Text variant="titleMedium" style={[styles.price, { color: brandInfo.color }]}>
-              {formatPrice(product.price)}
-            </Text>
+            <View style={styles.priceBlock}>
+              {hasDiscount && <Text variant="bodySmall" style={styles.regularPrice} accessibilityLabel={`Preço habitual ${formatPrice(regularPrice)}`}>{formatPrice(regularPrice)}</Text>}
+              <Text variant="titleMedium" style={[styles.price, { color: brandInfo.color }]}>
+                {formatPrice(product.price)}
+              </Text>
+            </View>
           </View>
+          {unitPrice && <Text variant="bodySmall" style={styles.unitPrice}>{unitPrice}</Text>}
+          {sourceInfo && !compact && <Text variant="labelSmall" style={styles.sourceInfo}>{sourceInfo}</Text>}
         </View>
 
         <View style={styles.actions}>
@@ -190,6 +237,27 @@ const styles = StyleSheet.create({
   },
   price: {
     fontWeight: 'bold',
+  },
+  priceBlock: {
+    alignItems: 'flex-end',
+    flexShrink: 0,
+  },
+  regularPrice: {
+    textDecorationLine: 'line-through',
+    color: colors.textMuted,
+  },
+  unitPrice: {
+    color: colors.textMuted,
+    textAlign: 'right',
+    marginTop: 2,
+  },
+  sourceInfo: {
+    color: colors.textMuted,
+    marginTop: 4,
+  },
+  loyaltyLabel: {
+    color: colors.warning,
+    marginBottom: 4,
   },
   actions: {
     flexDirection: 'column',

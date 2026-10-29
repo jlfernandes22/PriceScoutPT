@@ -1,14 +1,15 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { View, StyleSheet, ScrollView, useWindowDimensions } from 'react-native';
+import { View, StyleSheet, ScrollView, useWindowDimensions, Linking, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Portal, Modal, Surface, Text, IconButton, Icon, Divider, Badge, ActivityIndicator } from 'react-native-paper';
+import { Portal, Modal, Surface, Text, IconButton, Icon, Divider, Badge, ActivityIndicator, Button } from 'react-native-paper';
 import { LineChart } from 'react-native-chart-kit';
 import axios from 'axios';
 import { useLocalFuzzyMatch } from '../utils/fuzzyMatch';
 import { computeUnitPrice } from '../utils/unitPrice';
 import { getApiBaseUrl } from '../config';
-import { SUPERMARKET_BRANDS, getSupermarket, ProductImage } from './ProductCard';
+import { getSupermarket, ProductImage, getProductSourceInfo, productUnitPrice } from './ProductCard';
 import { colors, rgba } from '../theme';
+import { formatInformationForProduct } from '../utils/productInformation';
 
 const formatDate = (dateStr) => {
   const d = new Date(dateStr);
@@ -19,9 +20,10 @@ const ProductHistoryModal = ({ product, visible, onDismiss, isFavorite, onToggle
   const [history, setHistory] = useState([]);
   const [fetching, setFetching] = useState(false);
   const [networkError, setNetworkError] = useState(false);
+  const [detailResponse, setDetailResponse] = useState(null);
 
   // Hook reativo para preços cruzados offline
-  const { matches: crossPrices, loading: crossLoading } = useLocalFuzzyMatch(product);
+  const { matches: crossPrices, loading: crossLoading } = useLocalFuzzyMatch(visible ? product : null);
 
   // Largura da janela reativa (rotação/split-screen) — Dimensions.get() capturado
   // no render ficava congelado ao valor do primeiro render.
@@ -34,11 +36,14 @@ const ProductHistoryModal = ({ product, visible, onDismiss, isFavorite, onToggle
       const fetchHistory = async () => {
         setFetching(true);
         setNetworkError(false);
+        setHistory([]);
+        setDetailResponse(null);
         try {
           // Chamada permitida à API local
           const response = await axios.get(`${getApiBaseUrl()}/api/products/${product.id}`, { timeout: 8000 });
-          if (isMounted && response.data && response.data.price_history) {
-            setHistory(response.data.price_history);
+          if (isMounted && response.data) {
+            setHistory(Array.isArray(response.data.price_history) ? response.data.price_history : []);
+            setDetailResponse({ productId: product.id, data: response.data });
           }
         } catch (e) {
           console.error("[ProductHistoryModal Fetch Error]:", e);
@@ -56,6 +61,7 @@ const ProductHistoryModal = ({ product, visible, onDismiss, isFavorite, onToggle
     } else {
       // Limpar estados ao fechar para poupar RAM
       setHistory([]);
+      setDetailResponse(null);
       setNetworkError(false);
       setFetching(false);
     }
@@ -66,6 +72,12 @@ const ProductHistoryModal = ({ product, visible, onDismiss, isFavorite, onToggle
   }, [visible, product]);
 
   const brandInfo = product ? getSupermarket(product.supermarketId) : { name: '', color: colors.textMuted };
+  const sourceInfo = product ? getProductSourceInfo(product) : '';
+  const displayedUnitPrice = product ? productUnitPrice(product) : '';
+  const comparedStores = Object.keys(crossPrices);
+  const information = formatInformationForProduct(product, detailResponse);
+  const hasProductInformation = information.description || information.barcode || information.ingredients || information.allergens
+    || information.nutritionText || information.nutritionRows.length > 0;
 
   // Deteção de peso/volume/unidade e preço por unidade (€/kg, €/l, €/un)
   // para comparar o valor real de produtos com pesos diferentes.
@@ -149,6 +161,7 @@ const ProductHistoryModal = ({ product, visible, onDismiss, isFavorite, onToggle
                 </Text>
               </View>
             </View>
+
             <View style={styles.headerRight}>
               {/* Toggle de Favoritos dentro do Modal */}
               <IconButton
@@ -168,6 +181,11 @@ const ProductHistoryModal = ({ product, visible, onDismiss, isFavorite, onToggle
           </Surface>
 
           <ScrollView style={styles.scrollContainer} contentContainerStyle={styles.scrollContent}>
+            {(sourceInfo || product.requiresLoyaltyCard) && (
+              <Text variant="bodySmall" style={styles.sourceInfo}>
+                {sourceInfo}{product.requiresLoyaltyCard ? `${sourceInfo ? ' · ' : ''}Preço com cartão` : ''}
+              </Text>
+            )}
             {/* 0. Imagem do Produto */}
             <View style={styles.imageSection} accessible={false} importantForAccessibility="no-hide-descendants">
               <View style={[styles.detailImageWrap, { borderColor: brandInfo.color }]}>
@@ -176,23 +194,52 @@ const ProductHistoryModal = ({ product, visible, onDismiss, isFavorite, onToggle
             </View>
 
             {/* 0.5 Peso / Volume e Preço por Unidade */}
-            {unitText && (
+            {(unitText || displayedUnitPrice) && (
               <Surface style={styles.unitCard} elevation={1}>
                 {/* Icon (Paper v5) usa `source`, não `icon` — com a prop errada
                     o ícone devolvia null e não renderizava nada. */}
                 <Icon source="scale-balance" size={22} color={brandInfo.color} />
                 <View style={styles.unitColLeft}>
                   <Text variant="bodySmall" style={styles.unitLabel}>Peso / Volume</Text>
-                  <Text variant="titleSmall" style={styles.unitValue}>{unitText}</Text>
+                  <Text variant="titleSmall" style={styles.unitValue}>{unitText || 'Não indicado'}</Text>
                 </View>
                 <View style={styles.unitColRight}>
                   <Text variant="bodySmall" style={styles.unitLabel}>{unitLabel}</Text>
                   <Text variant="titleSmall" style={[styles.unitValue, { color: brandInfo.color }]}>
-                    {unitInfo ? `${unitInfo.per.toFixed(2).replace('.', ',')} ${unitInfo.label}` : '—'}
+                    {displayedUnitPrice || '—'}
                   </Text>
                 </View>
               </Surface>
             )}
+
+            {hasProductInformation && (
+              <>
+                <Text variant="titleSmall" style={styles.sectionTitle} accessibilityRole="header">Informação do produto</Text>
+                <Surface style={styles.informationCard} elevation={1}>
+                  {information.description && <Text variant="bodyMedium" style={styles.informationText} selectable>{information.description}</Text>}
+                  {information.barcode && <Text variant="bodySmall" style={styles.informationText} selectable>Código de barras: {information.barcode}</Text>}
+                  {information.ingredients && <View style={styles.informationSection}>
+                    <Text variant="titleSmall" style={styles.informationLabel}>Ingredientes</Text>
+                    <Text variant="bodyMedium" style={styles.informationText} selectable>{information.ingredients}</Text>
+                  </View>}
+                  {information.allergens && <View style={styles.informationSection}>
+                    <Text variant="titleSmall" style={styles.informationLabel}>Alergénios</Text>
+                    <Text variant="bodyMedium" style={styles.informationText} selectable>{information.allergens}</Text>
+                  </View>}
+                  {(information.nutritionText || information.nutritionRows.length > 0) && <View style={styles.informationSection}>
+                    <Text variant="titleSmall" style={styles.informationLabel}>Informação nutricional</Text>
+                    {information.nutritionBasis && <Text variant="bodySmall" style={styles.informationText}>Base: {information.nutritionBasis}</Text>}
+                    {information.servingSize && <Text variant="bodySmall" style={styles.informationText}>Dose: {information.servingSize}</Text>}
+                    {information.nutritionText && <Text variant="bodyMedium" style={styles.informationText} selectable>{information.nutritionText}</Text>}
+                    {information.nutritionRows.map((row, index) => <View key={`${row.label}-${index}`} style={styles.nutritionRow}>
+                      <Text variant="bodyMedium" style={styles.nutritionLabel}>{row.label}</Text>
+                      <Text variant="bodyMedium" style={styles.nutritionValue} selectable>{row.value}</Text>
+                    </View>)}
+                  </View>}
+                </Surface>
+              </>
+            )}
+            {information.sourceUrl && <Button icon="open-in-new" onPress={() => Linking.openURL(information.sourceUrl).catch(() => Alert.alert('Não foi possível abrir a página', 'Tenta novamente mais tarde.'))}>Ver produto na origem</Button>}
 
             {/* 1. Indicadores de Preço */}
             <Text variant="titleSmall" style={styles.sectionTitle} accessibilityRole="header">Estatísticas (Últimos 30 dias)</Text>
@@ -275,9 +322,10 @@ const ProductHistoryModal = ({ product, visible, onDismiss, isFavorite, onToggle
               </Surface>
             ) : (
               <Surface style={styles.crossContainer} elevation={1}>
-                {Object.entries(SUPERMARKET_BRANDS).map(([sId, brandData], index) => {
+                {comparedStores.map((sId, index) => {
+                  const brandData = getSupermarket(sId);
                   const match = crossPrices[sId];
-                  const isCurrent = sId === product.supermarketId;
+                  const isCurrent = match?.id === product.id;
 
                   return (
                     <View key={sId}>
@@ -297,6 +345,7 @@ const ProductHistoryModal = ({ product, visible, onDismiss, isFavorite, onToggle
                             <Text variant="bodySmall" style={styles.crossProductName} numberOfLines={1}>
                               {match && match.available ? match.name : 'Não disponível'}
                             </Text>
+                            {match?.scopeLabel && <Text variant="labelSmall" style={styles.crossProductName}>{match.scopeLabel}</Text>}
                           </View>
                         </View>
                         <Text 
@@ -309,10 +358,11 @@ const ProductHistoryModal = ({ product, visible, onDismiss, isFavorite, onToggle
                           {match && match.available ? `${match.price.toFixed(2)} €` : 'N/A'}
                         </Text>
                       </View>
-                      {index < Object.keys(SUPERMARKET_BRANDS).length - 1 && <Divider />}
+                      {index < comparedStores.length - 1 && <Divider />}
                     </View>
                   );
                 })}
+                {comparedStores.length === 0 && <Text variant="bodyMedium" style={styles.sourceInfo}>Não há preços atuais sem cartão para comparar no catálogo guardado.</Text>}
               </Surface>
             )}
           </ScrollView>
@@ -358,6 +408,10 @@ const styles = StyleSheet.create({
   },
   productBrand: {
     color: colors.textMuted,
+  },
+  sourceInfo: {
+    color: colors.textMuted,
+    paddingVertical: 12,
   },
   supermarketBadge: {
     color: colors.surface,
@@ -411,6 +465,39 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: colors.textSecondary,
     marginTop: 2,
+  },
+  informationCard: {
+    padding: 14,
+    backgroundColor: colors.surface,
+    borderRadius: 8,
+  },
+  informationSection: {
+    marginTop: 10,
+  },
+  informationLabel: {
+    color: colors.textPrimary,
+    marginBottom: 4,
+  },
+  informationText: {
+    color: colors.textSecondary,
+    marginBottom: 4,
+  },
+  nutritionRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 5,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  nutritionLabel: {
+    color: colors.textSecondary,
+    flex: 1,
+    marginRight: 12,
+  },
+  nutritionValue: {
+    color: colors.textPrimary,
+    flexShrink: 1,
+    textAlign: 'right',
   },
   statsContainer: {
     flexDirection: 'row',

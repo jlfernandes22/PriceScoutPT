@@ -6,9 +6,10 @@ import { Text, IconButton, Button, Chip, Surface, Divider, Badge, ActivityIndica
 import { Q } from '@nozbe/watermelondb';
 import withObservables from '@nozbe/with-observables';
 import { database } from '../model';
-import { findLocalFuzzyMatch } from '../utils/fuzzyMatch';
+import { findLocalFuzzyMatch, getComparisonContexts } from '../utils/fuzzyMatch';
+import { useProductCatalogRevision } from '../utils/useProductCatalogRevision';
 import ProductHistoryModal from '../components/ProductHistoryModal';
-import { SUPERMARKET_BRANDS, getSupermarket } from '../components/ProductCard';
+import { getSupermarket } from '../components/ProductCard';
 import { colors } from '../theme';
 
 const DISCLAIMER_KEY = '@compare_disclaimer_seen';
@@ -16,8 +17,10 @@ const DISCLAIMER_KEY = '@compare_disclaimer_seen';
 // Comparador de preços: fuzzy-match local entre supermercados e custo total
 // de cada um, mostrando qual é o mais barato para a lista atual.
 const ComparisonDetails = ({ shoppingList, items, favoriteIds, onToggleFavorite }) => {
-  const [comparisonData, setComparisonData] = useState([]);
+  const [comparisonSnapshot, setComparisonSnapshot] = useState({ data: [], contexts: [] });
+  const { data: comparisonData, contexts: comparisonContexts } = comparisonSnapshot;
   const [loading, setLoading] = useState(false);
+  const catalogRevision = useProductCatalogRevision(items && items.length > 0);
 
   const [selectedProductForHistory, setSelectedProductForHistory] = useState(null);
   const [isHistoryVisible, setIsHistoryVisible] = useState(false);
@@ -44,12 +47,13 @@ const ComparisonDetails = ({ shoppingList, items, favoriteIds, onToggleFavorite 
 
     const performLocalFuzzyMatch = async () => {
       if (!items || items.length === 0) {
-        setComparisonData([]);
+        setComparisonSnapshot({ data: [], contexts: [] });
         return;
       }
 
       setLoading(true);
       try {
+        const contexts = await getComparisonContexts(database);
         // Fetch de todos os produtos alvo em paralelo (I/O async independente).
         // Um produto referenciado pela lista pode ter sido apagado pela sync —
         // Relation.fetch() rejeita com NotFoundError, e um único caso desses
@@ -69,22 +73,10 @@ const ComparisonDetails = ({ shoppingList, items, favoriteIds, onToggleFavorite 
           if (!product) continue;
 
           // Lookups por supermercado em paralelo (antes eram sequenciais).
-          const supermarkets = Object.keys(SUPERMARKET_BRANDS);
           const entries = await Promise.all(
-            supermarkets.map(async (sId) => {
-              if (sId === product.supermarketId) {
-                return [
-                  sId,
-                  {
-                    available: true,
-                    price: parseFloat(product.price),
-                    name: product.name,
-                    id: product.id,
-                    imageUrl: product.imageUrl,
-                  },
-                ];
-              }
-              const match = await findLocalFuzzyMatch(database, product, sId);
+            contexts.map(async (context) => {
+              const sId = context.supermarketId;
+              const match = await findLocalFuzzyMatch(database, product, context);
               if (match) {
                 return [
                   sId,
@@ -127,7 +119,9 @@ const ComparisonDetails = ({ shoppingList, items, favoriteIds, onToggleFavorite 
         }
 
         if (isMounted) {
-          setComparisonData(resolvedItems);
+          // Commit scopes and their prices together: an old branch's total must
+          // never appear under a newly selected branch while sync is running.
+          setComparisonSnapshot({ data: resolvedItems, contexts });
         }
       } catch (e) {
         console.error("[Fuzzy Match Sync Error]:", e);
@@ -143,10 +137,12 @@ const ComparisonDetails = ({ shoppingList, items, favoriteIds, onToggleFavorite 
     return () => {
       isMounted = false;
     };
-  }, [items]);
+  }, [items, catalogRevision]);
 
   const { totals, cheapestId } = useMemo(() => {
-    const calculatedTotals = Object.entries(SUPERMARKET_BRANDS).map(([sId, brandInfo]) => {
+    const calculatedTotals = comparisonContexts.map((context) => {
+      const sId = context.supermarketId;
+      const brandInfo = getSupermarket(sId);
       let total = 0;
       let unavailableCount = 0;
 
@@ -161,7 +157,7 @@ const ComparisonDetails = ({ shoppingList, items, favoriteIds, onToggleFavorite 
 
       return {
         supermarketId: sId,
-        name: brandInfo.name,
+        name: context.storeLocation ? `${brandInfo.name} · ${context.storeLocation}` : brandInfo.name,
         color: brandInfo.color,
         total,
         unavailableCount,
@@ -195,7 +191,7 @@ const ComparisonDetails = ({ shoppingList, items, favoriteIds, onToggleFavorite 
       : calculatedTotals;
 
     return { totals: ordered, cheapestId: bestId };
-  }, [comparisonData]);
+  }, [comparisonData, comparisonContexts]);
 
   const sections = useMemo(() => {
     return totals.map(t => {
@@ -243,8 +239,8 @@ const ComparisonDetails = ({ shoppingList, items, favoriteIds, onToggleFavorite 
       return;
     }
 
-    const cheapestBrand = SUPERMARKET_BRANDS[cheapestId];
-    const cheapestTotal = totals.find(t => t.supermarketId === cheapestId)?.total || 0;
+    const cheapest = totals.find(t => t.supermarketId === cheapestId);
+    const cheapestTotal = cheapest?.total || 0;
 
     if (!cheapestId) {
       await Share.share({
@@ -254,7 +250,7 @@ const ComparisonDetails = ({ shoppingList, items, favoriteIds, onToggleFavorite 
       return;
     }
 
-    let shareText = `🛒 O meu cabaz PriceScoutPT custa ${cheapestTotal.toFixed(2)}€ no ${cheapestBrand?.name || 'Supermercado Mais Barato'}! 🏆\n\n`;
+    let shareText = `🛒 O meu cabaz PriceScoutPT custa ${cheapestTotal.toFixed(2)}€ no ${cheapest?.name || 'Supermercado Mais Barato'}! 🏆\n\n`;
     shareText += `📝 Lista de Compras:\n`;
 
     for (const item of comparisonData) {
@@ -376,7 +372,7 @@ const ComparisonDetails = ({ shoppingList, items, favoriteIds, onToggleFavorite 
           })}
         </ScrollView>
         <Text variant="bodySmall" style={styles.nationalNote}>
-          Preços de referência nacional (catálogo online) — nas lojas físicas podem variar por região.
+          Cada total corresponde ao catálogo público ou à loja indicada. Os preços podem variar entre lojas e datas.
         </Text>
       </View>
 

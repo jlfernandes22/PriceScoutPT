@@ -1,4 +1,4 @@
-import { schemaMigrations, createTable, unsafeExecuteSql } from '@nozbe/watermelondb/Schema/migrations';
+import { schemaMigrations, createTable, addColumns, unsafeExecuteSql } from '@nozbe/watermelondb/Schema/migrations';
 
 export default schemaMigrations({
   migrations: [
@@ -65,6 +65,25 @@ export default schemaMigrations({
           'CREATE INDEX IF NOT EXISTS products_category_id ON products (category_id);'
         ),
       ]
+    },
+    {
+      toVersion: 6,
+      steps: [addColumns({
+        table: 'products',
+        columns: [
+          { name: 'barcode', type: 'string', isOptional: true },
+          { name: 'regular_price', type: 'number', isOptional: true },
+          { name: 'unit_price', type: 'number', isOptional: true },
+          { name: 'unit_price_unit', type: 'string', isOptional: true },
+          { name: 'source_type', type: 'string', isOptional: true },
+          { name: 'source_url', type: 'string', isOptional: true },
+          { name: 'store_location', type: 'string', isOptional: true },
+          { name: 'observed_at', type: 'number', isOptional: true },
+          { name: 'requires_loyalty_card', type: 'boolean' },
+          { name: 'valid_from', type: 'number', isOptional: true },
+          { name: 'valid_to', type: 'number', isOptional: true },
+        ],
+      })],
     }
   ]
 });

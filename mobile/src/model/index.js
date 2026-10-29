@@ -35,6 +35,17 @@ export class Product extends Model {
   @field('unit') unit;
   @field('url') url;
   @field('image_url') imageUrl;
+  @field('barcode') barcode;
+  @field('regular_price') regularPrice;
+  @field('unit_price') unitPrice;
+  @field('unit_price_unit') unitPriceUnit;
+  @field('source_type') sourceType;
+  @field('source_url') sourceUrl;
+  @field('store_location') storeLocation;
+  @date('observed_at') observedAt;
+  @field('requires_loyalty_card') requiresLoyaltyCard;
+  @date('valid_from') validFrom;
+  @date('valid_to') validTo;
   @field('in_stock') inStock;
   @field('deleted') deleted;
   @date('last_scraped_at') lastScrapedAt;

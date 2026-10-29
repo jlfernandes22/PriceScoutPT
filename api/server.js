@@ -5,6 +5,7 @@ const syncRouter = require('./sync');
 const productsRouter = require('./products');
 const categoriesRouter = require('./categories');
 const scrapeRouter = require('./scrape');
+const supermarketsRouter = require('./supermarkets');
 require('dotenv').config();
 
 const app = express();
@@ -96,6 +97,7 @@ app.use('/api/sync', syncRouter);
 app.use('/api/products', productsRouter);
 app.use('/api/categories', categoriesRouter);
 app.use('/api/scrape', scrapeRouter);
+app.use('/api/supermarkets', supermarketsRouter);
 
 app.get('/api/health', async (req, res) => {
   // Health check real: além de provar que o processo está vivo, reporta o estado

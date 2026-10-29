@@ -8,10 +8,13 @@ import { database } from '../model';
 import ProductHistoryModal from '../components/ProductHistoryModal';
 import { getSupermarket, formatPrice } from '../components/ProductCard';
 import { colors } from '../theme';
+import { useProductCatalogRevision } from '../utils/useProductCatalogRevision';
+import { isOfferCurrent } from '../utils/offerEligibility';
 
 // Cabaz simples: lista de produtos, origem (supermercado) e total.
 // A comparação de preços vive no separador "Comparar".
 const BasketDetails = ({ shoppingList, items, favoriteIds, onToggleFavorite }) => {
+  const catalogRevision = useProductCatalogRevision(items && items.length > 0);
   const [resolvedItems, setResolvedItems] = useState(null);
   const [selectedProductForHistory, setSelectedProductForHistory] = useState(null);
   const [isHistoryVisible, setIsHistoryVisible] = useState(false);
@@ -44,15 +47,16 @@ const BasketDetails = ({ shoppingList, items, favoriteIds, onToggleFavorite }) =
     return () => {
       isMounted = false;
     };
-  }, [items]);
+  }, [items, catalogRevision]);
 
   const validItems = useMemo(() => {
     return (resolvedItems || []).filter(r => r.product);
   }, [resolvedItems]);
 
   const total = useMemo(() => {
-    return validItems.reduce((acc, r) => acc + (parseFloat(r.product.price) || 0) * r.quantity, 0);
+    return validItems.reduce((acc, r) => acc + (isOfferCurrent(r.product, Date.now(), true) ? Number(r.product.price) * r.quantity : 0), 0);
   }, [validItems]);
+  const unavailableCount = validItems.filter(r => !isOfferCurrent(r.product, Date.now(), true)).length;
 
   const updateQuantity = async (item, delta) => {
     try {
@@ -120,7 +124,7 @@ const BasketDetails = ({ shoppingList, items, favoriteIds, onToggleFavorite }) =
       {/* Resumo Total */}
       <Surface style={styles.totalCard} elevation={2}>
         <View style={styles.totalCol}>
-          <Text variant="labelLarge" style={styles.totalLabel}>Total do Cabaz</Text>
+          <Text variant="labelLarge" style={styles.totalLabel}>{unavailableCount ? 'Total com preços disponíveis' : 'Total do Cabaz'}</Text>
           <Text variant="headlineMedium" style={styles.totalText}>
             {formatPrice(total)}
           </Text>
@@ -129,6 +133,7 @@ const BasketDetails = ({ shoppingList, items, favoriteIds, onToggleFavorite }) =
           <Text variant="bodyMedium" style={styles.totalMetaText}>
             {validItems.length} {validItems.length === 1 ? 'produto' : 'produtos'}
           </Text>
+          {unavailableCount > 0 ? <Text variant="bodySmall">{unavailableCount} sem preço atual</Text> : null}
         </View>
       </Surface>
 
@@ -140,6 +145,7 @@ const BasketDetails = ({ shoppingList, items, favoriteIds, onToggleFavorite }) =
         renderItem={({ item: r }) => {
           const brandInfo = getSupermarket(r.product.supermarketId);
           const subtotal = (parseFloat(r.product.price) || 0) * r.quantity;
+          const available = isOfferCurrent(r.product, Date.now(), true);
           return (
             <Pressable
               style={({ pressed }) => [styles.itemRow, pressed && styles.itemRowPressed]}
@@ -173,13 +179,13 @@ const BasketDetails = ({ shoppingList, items, favoriteIds, onToggleFavorite }) =
                   ) : null}
                 </View>
                 <Text variant="bodySmall" numberOfLines={1} style={styles.itemUnitPrice}>
-                  {formatPrice(r.product.price)}
-                  {r.product.unit ? ` / ${r.product.unit}` : ''}
+                  {available ? formatPrice(r.product.price) : 'Preço indisponível'}
+                  {available && r.product.unit ? ` / ${r.product.unit}` : ''}
                 </Text>
               </View>
 
               <View style={styles.itemRight}>
-                <Text variant="titleSmall" style={styles.itemSubtotal}>{formatPrice(subtotal)}</Text>
+                <Text variant="titleSmall" style={styles.itemSubtotal}>{available ? formatPrice(subtotal) : '—'}</Text>
                 <View style={styles.qtyRow}>
                   <IconButton
                     icon="minus"

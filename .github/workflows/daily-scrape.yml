@@ -5,15 +5,48 @@ on:
     # 12:00 UTC ≈ 13:00 em Portugal (verão) / 12:00 (inverno)
     - cron: '0 12 * * *'
   workflow_dispatch:
+    inputs:
+      scrapers:
+        description: 'Coletores a executar (all = os seis coletores HTTP)'
+        type: choice
+        default: all
+        options:
+          - all
+          - Froiz,Aldi
+          - Continente
+          - Lidl
+          - PingoDoce
+          - Aldi
+          - Auchan
+          - Froiz
+      details_limit:
+        description: 'Máximo de páginas de detalhe por coletor'
+        type: choice
+        default: '100'
+        options:
+          - '0'
+          - '25'
+          - '100'
+          - '250'
 
 permissions:
   contents: read
+  id-token: write
+
+# Partilhado entre execuções agendadas e manuais. Uma nova execução espera
+# pela atual: nunca interrompe uma recolha que já esteja a gravar preços.
+concurrency:
+  group: pricescoutpt-production-scrape
+  cancel-in-progress: false
 
 jobs:
   scrape:
     runs-on: ubuntu-latest
-    # A recolha completa (Continente ~30min + restantes) ronda os 50 minutos —
-    # dentro do timeout default de 6h do job.
+    timeout-minutes: 180
+    env:
+      AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+      AZURE_POSTGRES_SERVER: ${{ vars.AZURE_POSTGRES_SERVER }}
+      FIREWALL_RULE: gh-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -29,14 +62,90 @@ jobs:
         working-directory: scraper
         run: pip install -r requirements.txt
 
-      - name: Recolher preços dos 5 supermercados (Continente, Lidl, Pingo Doce, Aldi, Auchan)
+      - name: Azure login (OIDC, sem credencial persistente)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Permitir temporariamente apenas o IPv4 deste runner
+        id: firewall
+        shell: bash
+        run: |
+          set -euo pipefail
+          runner_ip="$(curl -4 -fsS --retry 3 --connect-timeout 10 --max-time 30 https://api.ipify.org)"
+          RUNNER_IPV4="$runner_ip" python - <<'PY'
+          import ipaddress
+          import os
+          address = ipaddress.IPv4Address(os.environ['RUNNER_IPV4'])
+          if not address.is_global:
+              raise SystemExit('The runner must have a public IPv4 address.')
+          PY
+          # Registar antes do pedido: uma falha depois de criar a regra também
+          # deve executar a limpeza final.
+          echo 'attempted=true' >> "$GITHUB_OUTPUT"
+          az postgres flexible-server firewall-rule create \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --server-name "$AZURE_POSTGRES_SERVER" \
+            --name "$FIREWALL_RULE" \
+            --start-ip-address "$runner_ip" --end-ip-address "$runner_ip" \
+            --only-show-errors --output none
+
+      - name: Aguardar propagação da regra e ligação à base de dados
+        shell: bash
+        env:
+          DATABASE_URL: ${{ secrets.PRICESCOUTPT_DATABASE_URL }}
+        run: |
+          python - <<'PY'
+          import os
+          import time
+          import psycopg2
+          for attempt in range(18):
+              try:
+                  with psycopg2.connect(os.environ['DATABASE_URL'], connect_timeout=10) as connection:
+                      with connection.cursor() as cursor:
+                          cursor.execute('SELECT 1')
+                  break
+              except psycopg2.OperationalError:
+                  if attempt == 17:
+                      raise SystemExit('Database connection unavailable after firewall propagation retries.')
+                  print('Waiting for database access...')
+                  time.sleep(5)
+          PY
+
+      - name: Recolher preços (Continente, Lidl, Pingo Doce, Aldi, Auchan, Froiz)
         working-directory: scraper
+        shell: bash
         env:
           # Ligação direta ao PostgreSQL da Azure (SSLMODE via query string).
           # O runner do GH Actions é fiável (nunca "dorme"), ao contrário do
           # container gratuito que escala para zero e mata recolhas longas.
           DATABASE_URL: ${{ secrets.PRICESCOUTPT_DATABASE_URL }}
-          # Opcional: alertas no final da recolha
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-        run: python main.py
+          SELECTED_SCRAPERS: ${{ inputs.scrapers || 'all' }}
+          DETAILS_LIMIT: ${{ inputs.details_limit || '100' }}
+        run: |
+          set -euo pipefail
+          args=(--details-limit "$DETAILS_LIMIT")
+          if [[ "$SELECTED_SCRAPERS" != "all" ]]; then
+            args+=(--scraper "$SELECTED_SCRAPERS")
+          fi
+          python main.py "${args[@]}"
+
+      - name: Remover acesso temporário deste runner
+        if: ${{ always() && steps.firewall.outputs.attempted == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if az postgres flexible-server firewall-rule delete \
+              --resource-group "$AZURE_RESOURCE_GROUP" \
+              --server-name "$AZURE_POSTGRES_SERVER" \
+              --name "$FIREWALL_RULE" \
+              --yes --only-show-errors --output none; then
+              exit 0
+            fi
+            sleep 5
+          done
+          echo 'Failed to remove the temporary runner firewall rule.' >&2
+          exit 1

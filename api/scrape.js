@@ -38,7 +38,8 @@ const SCRAPE_SECRET = process.env.SCRAPE_SECRET;
 
 const SCRAPER_DIR = process.env.SCRAPER_DIR || path.resolve(__dirname, '../scraper');
 const SCRAPER_PYTHON = process.env.SCRAPER_PYTHON || 'python3';
-const VALID_SCRAPERS = ['Continente', 'Lidl', 'PingoDoce', 'Aldi', 'Auchan'];
+const VALID_SCRAPERS = ['Continente', 'Lidl', 'PingoDoce', 'Aldi', 'Auchan', 'Froiz', 'Intermarche'];
+const DEFAULT_SCRAPERS = VALID_SCRAPERS.filter(name => name !== 'Intermarche');
 
 // POST /api/scrape — dispara uma nova recolha de dados (fresca) em background
 // Protegido por SCRAPE_SECRET (opcional) para evitar abuso
@@ -70,12 +71,12 @@ router.post('/', (req, res, next) => {
   if (!Array.isArray(selected)) {
     return res.status(400).json({ error: 'Scrapers deve ser uma lista.' });
   }
-  const valid = selected.filter((s) => VALID_SCRAPERS.includes(s));
-  if (selected.length > 0 && valid.length === 0) {
+  if (selected.some(name => !VALID_SCRAPERS.includes(name))) {
     return res.status(400).json({
       error: `Scrapers inválidos. Disponíveis: ${VALID_SCRAPERS.join(', ')}`,
     });
   }
+  const valid = [...new Set(selected)];
 
   const args = [];
   if (valid.length > 0) {
@@ -86,7 +87,7 @@ router.post('/', (req, res, next) => {
   jobs.set(jobId, {
     id: jobId,
     status: 'running',
-    scrapers: valid.length > 0 ? valid : VALID_SCRAPERS,
+    scrapers: valid.length > 0 ? valid : DEFAULT_SCRAPERS,
     started_at: new Date().toISOString(),
     finished_at: null,
     log_tail: [],

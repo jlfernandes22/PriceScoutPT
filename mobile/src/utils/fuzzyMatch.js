@@ -1,7 +1,10 @@
 import { useState, useEffect } from 'react';
 import { Q } from '@nozbe/watermelondb';
 import { database } from '../model';
-import { SUPERMARKET_BRANDS } from '../components/ProductCard';
+import { isOfferCurrent } from './offerEligibility';
+import { parseUnit } from './unitPrice';
+import { useProductCatalogRevision } from './useProductCatalogRevision';
+import { PUBLIC_COMPARISON_SOURCES, isInComparisonContext, selectComparisonContexts } from './comparisonScope';
 import {
   contentTokens,
   getSimilarity,
@@ -9,6 +12,8 @@ import {
   significantTokens,
   likeVariants,
   normalize,
+  getDietaryQualifiers,
+  haveCompatibleDietaryQualifiers,
 } from './fuzzyCore';
 
 // A lógica pura (normalização, tokens, semelhança, variantes de LIKE) vive em
@@ -20,10 +25,27 @@ import {
  * resolvendo produtos com marcas/nomes distintos ("Miolo de Noz Pecan Continente"
  * ↔ "Miolo Noz Pecan"), ignorando marcas, unidades e palavras de ruído.
  */
-export const findLocalFuzzyMatch = async (db, product, targetSupermarketId) => {
+export const findLocalFuzzyMatch = async (db, product, targetContext) => {
   if (!product) return null;
-  if (product.supermarketId === targetSupermarketId) {
-    return product;
+  // Keep legacy callers safely scoped to public catalogue prices as well.
+  const context = typeof targetContext === 'string' ? { supermarketId: targetContext, storeLocation: null } : targetContext;
+  if (!context?.supermarketId) return null;
+  const targetSupermarketId = context.supermarketId;
+  const scopeConditions = context.storeLocation
+    ? [Q.where('store_location', context.storeLocation)]
+    : [Q.or(Q.where('store_location', null), Q.where('store_location', '')),
+      Q.or(Q.where('source_type', null), Q.where('source_type', Q.oneOf(PUBLIC_COMPARISON_SOURCES)))];
+  if (isInComparisonContext(product, context) && isOfferCurrent(product)) return product;
+
+  // A manufacturer barcode is stronger evidence than a similar display name.
+  if (product.barcode) {
+    const exact = await db.collections.get('products').query(
+      Q.where('supermarket_id', targetSupermarketId), Q.where('barcode', product.barcode),
+      Q.where('deleted', false), Q.where('in_stock', true), ...scopeConditions
+    ).fetch();
+    const eligible = exact.filter(candidate => isOfferCurrent(candidate) && isInComparisonContext(candidate, context))
+      .sort((a, b) => Number(a.price) - Number(b.price));
+    if (eligible.length) return eligible[0];
   }
 
   const srcTokens = contentTokens(product.name, product.brand);
@@ -47,6 +69,7 @@ const orConds = [...new Set(
       Q.where('supermarket_id', targetSupermarketId),
       Q.where('deleted', false),
       Q.where('in_stock', true),
+      ...scopeConditions,
       Q.or(...orConds),
       Q.take(500)
     ).fetch();
@@ -60,8 +83,18 @@ const orConds = [...new Set(
   let best = null;
   let bestSim = -1;
   let bestShared = 0;
+  const sourceQuantity = parseUnit(product.unit, product.name);
+  const sourceDietary = getDietaryQualifiers(product.name);
 
   for (const cand of candidates) {
+    if (!isOfferCurrent(cand) || !isInComparisonContext(cand, context)) continue;
+    if (!haveCompatibleDietaryQualifiers(sourceDietary, getDietaryQualifiers(cand.name))) continue;
+    const candidateQuantity = parseUnit(cand.unit, cand.name);
+    // Basket totals count packages. Comparing 100 g with 1 kg as one item
+    // creates a false saving even when the names look identical.
+    if (sourceQuantity && candidateQuantity &&
+        (sourceQuantity.type !== candidateQuantity.type ||
+         Math.abs(sourceQuantity.baseQty - candidateQuantity.baseQty) / sourceQuantity.baseQty > 0.05)) continue;
     const candNorm = normalize(cand.name);
 
     // Guarda de espécie
@@ -93,10 +126,31 @@ const orConds = [...new Set(
   return null;
 };
 
+export const getComparisonContexts = async (db) => {
+  const now = Date.now();
+  const sourcePlaceholders = PUBLIC_COMPARISON_SOURCES.map(() => '?').join(', ');
+  const rows = await db.collections.get('products').query(Q.unsafeSqlQuery(
+    `SELECT supermarket_id, NULLIF(TRIM(store_location), '') AS store_location,
+            COUNT(*) AS product_count,
+            MAX(COALESCE(observed_at, last_scraped_at, updated_at, 0)) AS latest_observed_at
+     FROM products
+     WHERE _status != 'deleted' AND deleted = 0 AND in_stock = 1 AND price > 0
+       AND requires_loyalty_card = 0
+       AND (valid_from IS NULL OR valid_from <= ?)
+       AND (valid_to IS NULL OR valid_to >= ?)
+       AND (NULLIF(TRIM(store_location), '') IS NOT NULL OR source_type IS NULL OR source_type IN (${sourcePlaceholders}))
+     GROUP BY supermarket_id, NULLIF(TRIM(store_location), '')`, [now, now, ...PUBLIC_COMPARISON_SOURCES]
+  )).unsafeFetchRaw();
+  return selectComparisonContexts(rows);
+};
+
+export const getComparableSupermarkets = async (db) => (await getComparisonContexts(db)).map((context) => context.supermarketId);
+
 // Custom Hook reativo para correspondência local
 export const useLocalFuzzyMatch = (product) => {
   const [matches, setMatches] = useState({});
   const [loading, setLoading] = useState(false);
+  const catalogRevision = useProductCatalogRevision(!!product);
 
   useEffect(() => {
     let isMounted = true;
@@ -113,21 +167,11 @@ export const useLocalFuzzyMatch = (product) => {
 
         // Corridas em paralelo — fazer os 4-5 lookups de supermercado em
         // sequência duplica 4-5x a latência no ecrã. Nenhum depende do outro.
-        const supermarkets = Object.keys(SUPERMARKET_BRANDS);
+        const contexts = await getComparisonContexts(database);
         const entries = await Promise.all(
-          supermarkets.map(async (sId) => {
-            if (sId === product.supermarketId) {
-              return [
-                sId,
-                {
-                  available: true,
-                  price: parseFloat(product.price),
-                  name: product.name,
-                  id: product.id,
-                },
-              ];
-            }
-            const match = await findLocalFuzzyMatch(database, product, sId);
+          contexts.map(async (context) => {
+            const sId = context.supermarketId;
+            const match = await findLocalFuzzyMatch(database, product, context);
             if (match) {
               return [
                 sId,
@@ -136,6 +180,7 @@ export const useLocalFuzzyMatch = (product) => {
                   price: parseFloat(match.price),
                   name: match.name,
                   id: match.id,
+                  scopeLabel: context.label,
                 },
               ];
             }
@@ -146,6 +191,7 @@ export const useLocalFuzzyMatch = (product) => {
                 price: 0,
                 name: 'Indisponível',
                 id: null,
+                scopeLabel: context.label,
               },
             ];
           })
@@ -171,7 +217,7 @@ export const useLocalFuzzyMatch = (product) => {
     return () => {
       isMounted = false;
     };
-  }, [product]);
+  }, [product, catalogRevision]);
 
   return { matches, loading };
 };
