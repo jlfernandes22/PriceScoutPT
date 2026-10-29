@@ -10,12 +10,15 @@ from scrapers.lidl import LidlScraper
 from scrapers.pingodoce import PingoDoceScraper
 from scrapers.aldi import AldiScraper
 from scrapers.auchan import AuchanScraper
+from scrapers.froiz import FroizScraper
+from scrapers.intermarche import IntermarcheScraper
 
 load_dotenv()
 
 
-def run_scraper(scraper, errors_list) -> int:
+def run_scraper(scraper, errors_list, details_limit=0) -> int:
     all_products = []
+    written = 0
     scraper_failed = False
     # Nova run: limpar erros de recolhas anteriores (por scraper) para que a
     # decisão de "marcar como esgotado" reflita APENAS esta execução.
@@ -24,6 +27,8 @@ def run_scraper(scraper, errors_list) -> int:
         print(f'Running scraper: {scraper.__class__.__name__}')
 
         categories = scraper.discover_categories()
+        if not categories:
+            raise ValueError('No categories discovered; source coverage is incomplete.')
 
         if scraper.__class__.__name__ == 'ContinenteScraper':
             import concurrent.futures
@@ -49,6 +54,7 @@ def run_scraper(scraper, errors_list) -> int:
                 except KeyboardInterrupt:
                     print('\n  Interrompido pelo utilizador (Ctrl+C). A parar a extração para gravar na Base de Dados...')
                     scraper_failed = True
+                    errors_list.append(f'{scraper.__class__.__name__}: interrupted collection')
                     break
                 except Exception as e:
                     err_msg = f"{scraper.__class__.__name__} ({category['name']}): {e}"
@@ -60,25 +66,42 @@ def run_scraper(scraper, errors_list) -> int:
                 print(f"    Collected {len(scraped_products)} products from {category['name']}")
 
         print(f'\n  --- A iniciar gravação na Base de Dados ({len(all_products)} produtos)... ---')
-        scraper.sync_to_db(all_products)
+        for error in scraper.scrape_errors:
+            message = f'{scraper.__class__.__name__}: {error}'
+            if message not in errors_list:
+                errors_list.append(message)
+        if not all_products:
+            raise ValueError('No products extracted; refusing to report a successful run.')
+        if details_limit:
+            scraper.enrich_product_details(all_products, limit=details_limit)
+            for error in getattr(scraper, 'detail_errors', []):
+                errors_list.append(f'{scraper.__class__.__name__} detail enrichment: {error}')
+        written = scraper.sync_to_db(all_products)
 
         # Marcar como esgotados os produtos que deixaram de ser encontrados,
         # apenas quando a run do scraper foi COMPLETA (sem erros de rede E sem
         # exceções). Uma recolha parcial (ex: categoria que falhou a meio) não
         # deve apagar produtos que simplesmente não chegaram a ser recolhidos.
-        if all_products and not scraper_failed and not scraper.scrape_errors:
+        if (all_products and not scraper_failed and not scraper.scrape_errors
+                and getattr(scraper, 'allow_mark_missing', False)):
             external_ids = [p['external_id'] for p in all_products if p.get('external_id')]
             scraper.mark_missing(external_ids)
             print(f'  ✓ Produtos ausentes marcados como esgotados.')
 
-        print(f'  ✓ Concluído com sucesso: {scraper.__class__.__name__} gravou {len(all_products)} produtos na BD!\n')
+        status = 'Partial collection' if scraper_failed or scraper.scrape_errors else 'Collection complete'
+        print(f'  {status}: {scraper.__class__.__name__} saved {written} latest observations.\n')
     except Exception as exc:
         err_msg = f"{scraper.__class__.__name__} (Scraper Crash): {exc}"
         print(f'Error while running {scraper.__class__.__name__}: {exc}')
         traceback.print_exc()
         errors_list.append(err_msg)
+        for error in getattr(scraper, 'scrape_errors', []):
+            message = f'{scraper.__class__.__name__}: {error}'
+            if message not in errors_list:
+                errors_list.append(message)
+        return 0
         
-    return len(all_products)
+    return written
 
 
 def send_alert(stats: dict, errors: list[str]) -> None:
@@ -160,7 +183,11 @@ def send_alert(stats: dict, errors: list[str]) -> None:
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="PriceScout PT Scraper")
     parser.add_argument('--scraper', '--scrapers', dest='scrapers', type=str, help='Comma-separated list of scrapers to run (e.g. Lidl,PingoDoce,Continente)')
+    parser.add_argument('--details-limit', type=int, default=0,
+                        help='Fetch public structured details for up to N products per scraper (default: listing data only)')
     args = parser.parse_args()
+    if args.details_limit < 0:
+        parser.error('--details-limit cannot be negative')
     database_url = os.environ.get('DATABASE_URL')
     if not database_url:
         print('DATABASE_URL is required in environment.')
@@ -174,16 +201,23 @@ if __name__ == '__main__':
         'PingoDoce': PingoDoceScraper(db_manager),
         'Aldi': AldiScraper(db_manager),
         'Auchan': AuchanScraper(db_manager),
+        'Froiz': FroizScraper(db_manager),
+        'Intermarche': IntermarcheScraper(db_manager),
     }
 
     if args.scrapers:
-        selected = [s.strip() for s in args.scrapers.split(',')]
-        scrapers = [all_scrapers[s] for s in selected if s in all_scrapers]
+        selected = list(dict.fromkeys(s.strip() for s in args.scrapers.split(',')))
+        invalid = [s for s in selected if s not in all_scrapers]
+        if invalid:
+            parser.error(f"Unknown scrapers: {', '.join(invalid)}")
+        scrapers = [all_scrapers[s] for s in selected]
         if not scrapers:
             print(f"Nenhum scraper válido selecionado. Disponíveis: {', '.join(all_scrapers.keys())}")
             sys.exit(1)
     else:
-        scrapers = list(all_scrapers.values())
+        # Browser campaigns are explicitly selected: the default lightweight
+        # daily job does not require Chromium or an assumed campaign/store.
+        scrapers = [scraper for name, scraper in all_scrapers.items() if name != 'Intermarche']
 
     scraped_stats = {}
     errors_list = []
@@ -191,7 +225,7 @@ if __name__ == '__main__':
     try:
         for scraper in scrapers:
             name = scraper.__class__.__name__.replace("Scraper", "")
-            count = run_scraper(scraper, errors_list)
+            count = run_scraper(scraper, errors_list, details_limit=args.details_limit)
             scraped_stats[name] = count
             
         # Pruning de dados antigos da BD (Free-Tier Guardian)
@@ -228,5 +262,6 @@ if __name__ == '__main__':
             except Exception as e:
                 print(f"Error closing scraper {scraper.__class__.__name__}: {e}")
         db_manager.close()
+    sys.exit(1 if errors_list else 0)
 
 

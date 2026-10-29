@@ -1,0 +1,13 @@
+# Only API/runtime scraper source enters a build from the repository root.
+**
+!api/
+!api/*.js
+!api/package.json
+!api/package-lock.json
+!api/Dockerfile
+!scraper/
+!scraper/*.py
+!scraper/retailers.json
+!scraper/requirements.txt
+!scraper/scrapers/
+!scraper/scrapers/*.py

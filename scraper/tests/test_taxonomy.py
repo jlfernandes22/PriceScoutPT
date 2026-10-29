@@ -24,11 +24,14 @@ class TaxonomyTest(unittest.TestCase):
             DEFAULT_CATEGORY_SLUG,
         )
 
-    def test_supermercado_desconhecido(self):
+    def test_canonical_names_are_usable_for_imports_from_additional_chains(self):
         self.assertEqual(
             resolve_source_category('nao-existe', 'Mercearia'),
-            DEFAULT_CATEGORY_SLUG,
+            'mercearia',
         )
+        self.assertEqual(resolve_source_category('mercadona', 'laticinios e ovos'), 'laticinios-e-ovos')
+        self.assertEqual(resolve_source_category('froiz', 'Frutas e legumes'), 'frutas-e-vegetais')
+        self.assertEqual(resolve_source_category('froiz', 'Laticínios produtos vegetais e outros'), 'laticinios-e-ovos')
 
     def test_insensivel_a_acentos_e_maiusculas(self):
         # "Laticínios e Ovos" vs "Laticinios e Ovos"

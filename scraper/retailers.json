@@ -1,0 +1,106 @@
+[
+  {
+    "id": "00000000-0000-0000-0000-000000000001",
+    "name": "Continente",
+    "slug": "continente",
+    "website": "https://www.continente.pt/",
+    "collection": "scraper",
+    "coverage": "online_catalog"
+  },
+  {
+    "id": "00000000-0000-0000-0000-000000000002",
+    "name": "Lidl",
+    "slug": "lidl",
+    "website": "https://www.lidl.pt/",
+    "collection": "scraper",
+    "coverage": "public_offers"
+  },
+  {
+    "id": "00000000-0000-0000-0000-000000000003",
+    "name": "Pingo Doce",
+    "slug": "pingo-doce",
+    "website": "https://www.pingodoce.pt/",
+    "collection": "scraper",
+    "coverage": "online_catalog"
+  },
+  {
+    "id": "00000000-0000-0000-0000-000000000004",
+    "name": "Aldi",
+    "slug": "aldi",
+    "website": "https://www.aldi.pt/",
+    "collection": "scraper",
+    "coverage": "leaflet"
+  },
+  {
+    "id": "00000000-0000-0000-0000-000000000005",
+    "name": "Auchan",
+    "slug": "auchan",
+    "website": "https://www.auchan.pt/",
+    "collection": "scraper",
+    "coverage": "online_catalog"
+  },
+  {
+    "id": "00000000-0000-0000-0000-000000000006",
+    "name": "Mercadona",
+    "slug": "mercadona",
+    "website": "https://www.mercadona.pt/",
+    "collection": "import",
+    "coverage": "observations_only"
+  },
+  {
+    "id": "00000000-0000-0000-0000-000000000007",
+    "name": "Intermarché",
+    "slug": "intermarche",
+    "website": "https://intermarche.pt/",
+    "collection": "browser_optional",
+    "coverage": "public_campaigns_experimental"
+  },
+  {
+    "id": "00000000-0000-0000-0000-000000000008",
+    "name": "El Corte Inglés",
+    "slug": "el-corte-ingles",
+    "website": "https://www.elcorteingles.pt/supermercado/",
+    "collection": "import",
+    "coverage": "observations_only"
+  },
+  {
+    "id": "00000000-0000-0000-0000-000000000009",
+    "name": "Froiz",
+    "slug": "froiz",
+    "website": "https://loja.froiz.com/",
+    "collection": "scraper",
+    "coverage": "online_catalog"
+  },
+  {
+    "id": "00000000-0000-0000-0000-000000000010",
+    "name": "Minipreço",
+    "slug": "minipreco",
+    "website": "https://www.minipreco.pt/",
+    "collection": "import",
+    "coverage": "observations_only"
+  },
+  {
+    "id": "00000000-0000-0000-0000-000000000011",
+    "name": "E.Leclerc",
+    "slug": "e-leclerc",
+    "website": "https://www.e-leclerc.pt/",
+    "collection": "import",
+    "coverage": "observations_only"
+  },
+  {
+    "id": "00000000-0000-0000-0000-000000000012",
+    "name": "Amanhecer",
+    "slug": "amanhecer",
+    "website": "https://www.amanhecer.pt/",
+    "collection": "import",
+    "coverage": "observations_only"
+  },
+  {
+    "id": "00000000-0000-0000-0000-000000000013",
+    "name": "SPAR",
+    "slug": "spar",
+    "website": "https://spar.pt/",
+    "collection": "import",
+    "coverage": "observations_only"
+  }
+]

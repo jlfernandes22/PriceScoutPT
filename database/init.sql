@@ -43,6 +43,18 @@ CREATE TABLE products (
   unit TEXT,
   url TEXT,
   image_url TEXT,
+  barcode TEXT,
+  regular_price NUMERIC(10,2),
+  unit_price NUMERIC(12,4),
+  unit_price_unit TEXT,
+  source_type TEXT NOT NULL DEFAULT 'online_catalog',
+  source_url TEXT,
+  store_location TEXT,
+  observed_at TIMESTAMPTZ,
+  requires_loyalty_card BOOLEAN NOT NULL DEFAULT false,
+  valid_from TIMESTAMPTZ,
+  valid_to TIMESTAMPTZ,
+  metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
   in_stock BOOLEAN NOT NULL DEFAULT true,
   deleted BOOLEAN NOT NULL DEFAULT false,
   last_scraped_at TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -72,7 +84,7 @@ CREATE INDEX idx_products_created_at_id ON products(created_at, id);
 -- Suporta as consultas de delta (updated) do /api/sync — as consultas permitem
 -- deleted IS NULL e não exigem in_stock = true, pelo que os índices parciais
 -- existentes não servem para todos os casos.
-CREATE INDEX idx_products_updated_at ON products(updated_at);
+CREATE INDEX idx_products_updated_at ON products(updated_at, id);
 CREATE INDEX idx_products_active_updated_at ON products(updated_at) WHERE deleted = false AND in_stock = true;
 CREATE INDEX idx_products_deleted_out_of_stock_updated_at ON products(updated_at) WHERE deleted = true OR in_stock = false;
 CREATE INDEX idx_price_history_product_id ON price_history(product_id);
@@ -91,10 +103,43 @@ CREATE INDEX idx_products_active_supermarket_name
 
 CREATE INDEX idx_products_search_vector ON products USING GIN(search_vector);
 
-CREATE FUNCTION products_search_vector_trigger() RETURNS trigger AS $$
+CREATE OR REPLACE FUNCTION public.product_search_normalize(value TEXT)
+RETURNS TEXT LANGUAGE sql IMMUTABLE PARALLEL SAFE AS $$
+  SELECT btrim(regexp_replace(
+    lower(regexp_replace(normalize(coalesce(value, ''), NFKD), U&'[\0300-\036f]', '', 'g')),
+    '[^[:alnum:]]+', ' ', 'g'
+  ));
+$$;
+
+CREATE OR REPLACE FUNCTION public.product_search_vector(
+  product_name TEXT, product_brand TEXT, product_description TEXT, product_barcode TEXT
+) RETURNS TSVECTOR LANGUAGE sql IMMUTABLE PARALLEL SAFE AS $$
+  SELECT setweight(to_tsvector('pg_catalog.portuguese', public.product_search_normalize(product_name)), 'A')
+      || setweight(to_tsvector('pg_catalog.simple', coalesce(product_barcode, '')), 'A')
+      || setweight(to_tsvector('pg_catalog.portuguese', public.product_search_normalize(product_brand)), 'B')
+      || setweight(to_tsvector('pg_catalog.portuguese', public.product_search_normalize(left(product_description, 2000))), 'D');
+$$;
+
+-- Build ANDed prefixes from lexemes rather than accepting tsquery operators
+-- from users. Accents, punctuation, word order and Portuguese inflections are
+-- handled consistently. Stopword-only input produces an empty query.
+CREATE OR REPLACE FUNCTION public.product_search_query(value TEXT)
+RETURNS TSQUERY LANGUAGE sql IMMUTABLE PARALLEL SAFE AS $$
+  SELECT coalesce(
+    to_tsquery('pg_catalog.simple', string_agg(quote_literal(lexeme) || ':*', ' & ')),
+    ''::tsquery
+  )
+  FROM unnest(tsvector_to_array(to_tsvector(
+    'pg_catalog.portuguese', public.product_search_normalize(value)
+  ))) AS terms(lexeme);
+$$;
+
+CREATE OR REPLACE FUNCTION products_search_vector_trigger() RETURNS trigger AS $$
 BEGIN
-  NEW.search_vector := to_tsvector('pg_catalog.portuguese', coalesce(NEW.name, '') || ' ' || coalesce(NEW.brand, ''));
-  NEW.updated_at := now();
+  -- Coordinate the sync watermark with writers that have not committed yet.
+  PERFORM pg_advisory_xact_lock_shared(76231027);
+  NEW.search_vector := public.product_search_vector(NEW.name, NEW.brand, NEW.description, NEW.barcode);
+  NEW.updated_at := clock_timestamp();
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
@@ -105,9 +150,9 @@ FOR EACH ROW EXECUTE FUNCTION products_search_vector_trigger();
 
 CREATE OR REPLACE FUNCTION log_price_history() RETURNS trigger AS $$
 BEGIN
-  IF TG_OP = 'INSERT' OR (TG_OP = 'UPDATE' AND NEW.price IS DISTINCT FROM OLD.price) THEN
+  IF NEW.price > 0 AND (TG_OP = 'INSERT' OR (TG_OP = 'UPDATE' AND NEW.price IS DISTINCT FROM OLD.price)) THEN
     INSERT INTO price_history (product_id, price, price_currency, recorded_at)
-    VALUES (NEW.id, NEW.price, NEW.price_currency, now());
+    VALUES (NEW.id, NEW.price, NEW.price_currency, coalesce(NEW.observed_at, clock_timestamp()));
   END IF;
   RETURN NEW;
 END;
@@ -129,7 +174,15 @@ VALUES
   ('00000000-0000-0000-0000-000000000002', 'Lidl', 'lidl'),
   ('00000000-0000-0000-0000-000000000003', 'Pingo Doce', 'pingo-doce'),
   ('00000000-0000-0000-0000-000000000004', 'Aldi', 'aldi'),
-  ('00000000-0000-0000-0000-000000000005', 'Auchan', 'auchan')
+  ('00000000-0000-0000-0000-000000000005', 'Auchan', 'auchan'),
+  ('00000000-0000-0000-0000-000000000006', 'Mercadona', 'mercadona'),
+  ('00000000-0000-0000-0000-000000000007', 'Intermarché', 'intermarche'),
+  ('00000000-0000-0000-0000-000000000008', 'El Corte Inglés', 'el-corte-ingles'),
+  ('00000000-0000-0000-0000-000000000009', 'Froiz', 'froiz'),
+  ('00000000-0000-0000-0000-000000000010', 'Minipreço', 'minipreco'),
+  ('00000000-0000-0000-0000-000000000011', 'E.Leclerc', 'e-leclerc'),
+  ('00000000-0000-0000-0000-000000000012', 'Amanhecer', 'amanhecer'),
+  ('00000000-0000-0000-0000-000000000013', 'SPAR', 'spar')
 ON CONFLICT DO NOTHING;
 
 -- Taxonomia canónica (19 categorias globais)

@@ -8,20 +8,21 @@ const db = require('./db');
 const router = express.Router();
 
 // Estado simples em memória dos jobs de scraping
-// Limpeza automática: jobs com mais de 1 hora são removidos
+// Limpeza automática: jobs terminados com mais de 1 hora são removidos
 const jobs = new Map();
 const JOB_MAX_AGE_MS = 60 * 60 * 1000; // 1 hora
-let running = false; // single-flight: só uma recolha de cada vez
 
 function cleanupOldJobs() {
   const now = Date.now();
   for (const [id, job] of jobs) {
+    // NUNCA remover um job 'running': o processo Python detached continua a
+    // correr, e apagar o job quebraria o single-flight (isAnyRunning deixaria
+    // de o ver, permitindo lançar um segundo scraper concorrente) e faria
+    // /status/:id começar a devolver 404. O job sai daqui quando termina.
+    if (job.status === 'running') continue;
     const started = new Date(job.started_at).getTime();
     if (now - started > JOB_MAX_AGE_MS) {
       jobs.delete(id);
-      if (job.status === 'running') {
-        running = false;
-      }
     }
   }
 }
@@ -37,7 +38,8 @@ const SCRAPE_SECRET = process.env.SCRAPE_SECRET;
 
 const SCRAPER_DIR = process.env.SCRAPER_DIR || path.resolve(__dirname, '../scraper');
 const SCRAPER_PYTHON = process.env.SCRAPER_PYTHON || 'python3';
-const VALID_SCRAPERS = ['Continente', 'Lidl', 'PingoDoce', 'Aldi', 'Auchan'];
+const VALID_SCRAPERS = ['Continente', 'Lidl', 'PingoDoce', 'Aldi', 'Auchan', 'Froiz', 'Intermarche'];
+const DEFAULT_SCRAPERS = VALID_SCRAPERS.filter(name => name !== 'Intermarche');
 
 // POST /api/scrape — dispara uma nova recolha de dados (fresca) em background
 // Protegido por SCRAPE_SECRET (opcional) para evitar abuso
@@ -69,12 +71,12 @@ router.post('/', (req, res, next) => {
   if (!Array.isArray(selected)) {
     return res.status(400).json({ error: 'Scrapers deve ser uma lista.' });
   }
-  const valid = selected.filter((s) => VALID_SCRAPERS.includes(s));
-  if (selected.length > 0 && valid.length === 0) {
+  if (selected.some(name => !VALID_SCRAPERS.includes(name))) {
     return res.status(400).json({
       error: `Scrapers inválidos. Disponíveis: ${VALID_SCRAPERS.join(', ')}`,
     });
   }
+  const valid = [...new Set(selected)];
 
   const args = [];
   if (valid.length > 0) {
@@ -82,11 +84,10 @@ router.post('/', (req, res, next) => {
   }
 
   const jobId = crypto.randomUUID();
-  running = true;
   jobs.set(jobId, {
     id: jobId,
     status: 'running',
-    scrapers: valid.length > 0 ? valid : VALID_SCRAPERS,
+    scrapers: valid.length > 0 ? valid : DEFAULT_SCRAPERS,
     started_at: new Date().toISOString(),
     finished_at: null,
     log_tail: [],
@@ -122,7 +123,6 @@ router.post('/', (req, res, next) => {
       job.finished_at = new Date().toISOString();
       job.error = err.message;
     }
-    running = false;
   });
 
   child.on('close', (code) => {
@@ -132,7 +132,6 @@ router.post('/', (req, res, next) => {
       job.finished_at = new Date().toISOString();
       job.exit_code = code;
     }
-    running = false;
   });
 
   res.status(202).json({ job_id: jobId, status: 'running', scrapers: valid.length > 0 ? valid : VALID_SCRAPERS });

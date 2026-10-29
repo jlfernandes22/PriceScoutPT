@@ -1,262 +1,182 @@
-import re
+import hashlib
 import json
+import re
+from urllib.parse import urlsplit
+
 from bs4 import BeautifulSoup
 from scraper_base import ScraperBase
 
+
 class AldiScraper(ScraperBase):
+    """Public weekly leaflets; these cover advertised offers, not a full stock list."""
     supermarket_id = '00000000-0000-0000-0000-000000000004'
     base_url = 'https://www.aldi.pt'
-
-    def __init__(self, db_manager):
-        super().__init__(db_manager)
-        self.session.headers.update({
-            'Accept-Language': 'pt-PT,pt;q=0.9',
-        })
+    source_type = 'leaflet'
 
     def discover_categories(self):
-        # O Aldi funciona exclusivamente com folhetos semanais de oportunidades.
-        return [
-            {
-                'name': 'Oportunidades da Semana',
-                'path': '/folheto/esta-semana.html'
-            }
-        ]
+        return [{'name': 'Oportunidades da Semana', 'path': '/folheto/esta-semana.html'}]
 
     def scrape_category(self, category):
-        print(f"  A obter folheto do Aldi: {category['name']}")
-        
-        # 1. Obter a URL do folheto interativo de forma dinâmica
-        target_path = category['path']
-        full_url = f"{self.base_url}{target_path}"
-        
         try:
-            r = self.get_with_retry(full_url, timeout=30)
-        except Exception as e:
-            err = f"Aldi (folheto estático): {e}"
-            print(f"    [Fallback] Erro na URL estática do folheto: {e}. A tentar descobrir pelo index principal...")
-            self.scrape_errors.append(err)
+            page_url = self._absolute_url(category.get('path'))
             try:
-                # Fallback: tentar descobrir a URL do folheto no index principal
-                r_index = self.session.get(self.base_url, timeout=30)
-                soup_index = BeautifulSoup(r_index.text, 'html.parser')
-                script_next = soup_index.find('script', id='__NEXT_DATA__')
-                if script_next:
-                    data_next = json.loads(script_next.string)
-                    # Procurar por links de folheto
-                    links = []
-                    def find_links_in_dict(d):
-                        if isinstance(d, dict):
-                            for k, v in d.items():
-                                if k in ['link', 'url', 'reference', 'href', 'path'] and isinstance(v, str):
-                                    if 'folheto' in v.lower() and 'esta-semana' in v.lower():
-                                        links.append(v)
-                                else:
-                                    find_links_in_dict(v)
-                        elif isinstance(d, list):
-                            for item in d:
-                                find_links_in_dict(item)
-                    find_links_in_dict(data_next)
-                    if links:
-                        full_url = links[0] if links[0].startswith('http') else f"{self.base_url}{links[0]}"
-                        print(f"    [Fallback] Encontrada URL dinâmica: {full_url}")
-                        r = self.session.get(full_url, timeout=30)
-            except Exception as e_fallback:
-                err = f"Aldi (folheto dinâmico): {e_fallback}"
-                print(f"    [Fallback] Falha ao descobrir folheto dinamicamente: {e_fallback}")
-                self.scrape_errors.append(err)
-                return []
-
-        # 2. Extrair Next.js props de __NEXT_DATA__ para obter a URL iPaper
-        try:
-            soup = BeautifulSoup(r.text, 'html.parser')
+                response = self.get_with_retry(page_url, timeout=30)
+            except Exception:
+                # Recover a changed public leaflet path from the official index.
+                index = self.get_with_retry(self.base_url, timeout=30)
+                soup = BeautifulSoup(index.text, 'html.parser')
+                links = [a['href'] for a in soup.select('a[href]') if 'folheto' in a['href'] and 'esta-semana' in a['href']]
+                if not links:
+                    raise ValueError('current leaflet link not found in the public index')
+                response = self.get_with_retry(self._absolute_url(links[0]), timeout=30)
+            soup = BeautifulSoup(response.text, 'html.parser')
             script = soup.find('script', id='__NEXT_DATA__')
-            if not script:
-                raise Exception("Script __NEXT_DATA__ não encontrado na página principal do folheto.")
-            
-            next_data = json.loads(script.string)
-            leaflet_url = next_data.get("props", {}).get("pageProps", {}).get("page", {}).get("link")
-            if not leaflet_url:
-                raise Exception("Propriedade link do folheto não encontrada no __NEXT_DATA__.")
-            
-            print(f"    URL do Visualizador iPaper: {leaflet_url}")
-        except Exception as e:
-            err = f"Aldi (parse __NEXT_DATA__): {e}"
-            print(f"    Erro ao analisar __NEXT_DATA__: {e}")
-            self.scrape_errors.append(err)
+            next_data = json.loads(script.string) if script and script.string else {}
+            leaflet_url = next_data.get('props', {}).get('pageProps', {}).get('page', {}).get('link')
+            if not leaflet_url or urlsplit(leaflet_url).hostname not in ('folhetos.aldi.pt', 'www.aldi.pt', 'aldi.pt'):
+                raise ValueError('official public leaflet viewer link not found')
+            viewer = self.get_with_retry(leaflet_url, timeout=30)
+            settings = self._extract_settings(viewer.text)
+            page_texts = settings.get('pageTexts')
+            if not isinstance(page_texts, list) or not page_texts or not all(isinstance(t, str) for t in page_texts):
+                raise ValueError('leaflet pageTexts missing or malformed')
+            products = self._extract_page_texts(page_texts, category, leaflet_url)
+            if not products:
+                self._record_error(category, 'no reliable product/price pairs found in the leaflet')
+            return products
+        except Exception as exc:
+            self._record_error(category, str(exc))
             return []
 
-        # 3. Obter a página do visualizador iPaper e ler o window.staticSettings
+    @staticmethod
+    def _extract_settings(text):
+        marker = re.search(r'window\.staticSettings\s*=\s*', text)
+        if not marker:
+            raise ValueError('public leaflet settings not found')
+        # raw_decode handles multiline JSON and braces inside string values.
+        settings, _ = json.JSONDecoder().raw_decode(text[marker.end():])
+        if not isinstance(settings, dict):
+            raise ValueError('invalid leaflet settings')
+        return settings
+
+    @staticmethod
+    def _validity(text):
+        match = re.search(r'promoções válidas de\s+(\d{1,2}/\d{1,2}/\d{2,4})\s+a\s+(\d{1,2}/\d{1,2}/\d{2,4})', text, re.I)
+        if not match:
+            return {}
+        from datetime import datetime
+        values = {}
         try:
-            r_viewer = self.get_with_retry(leaflet_url, timeout=30)
-            if r_viewer.status_code != 200:
-                raise Exception(f"Falha ao aceder ao visualizador iPaper (Status: {r_viewer.status_code})")
-            
-            match = re.search(r'window\.staticSettings\s*=\s*(\{.*?\});', r_viewer.text)
-            if not match:
-                raise Exception("window.staticSettings não encontrado no HTML do visualizador.")
-            
-            settings = json.loads(match.group(1))
-            page_texts = settings.get("pageTexts", [])
-            if not page_texts:
-                raise Exception("pageTexts vazios ou não encontrados nas definições do iPaper.")
-            
-            print(f"    Folheto carregado: {len(page_texts)} páginas encontradas.")
-        except Exception as e:
-            err = f"Aldi (dados iPaper): {e}"
-            print(f"    Erro ao extrair dados do iPaper: {e}")
-            self.scrape_errors.append(err)
-            return []
+            for key, raw in zip(('valid_from', 'valid_to'), match.groups()):
+                fmt = '%d/%m/%Y' if len(raw.split('/')[-1]) == 4 else '%d/%m/%y'
+                values[key] = datetime.strptime(raw, fmt).date().isoformat()
+        except ValueError:
+            return {}
+        return values
 
-        # 4. Processar o texto de cada página e extrair os produtos de forma resiliente
-        products = []
-        
-        def clean_text_field(text):
-            # Remove leading symbols/markers
-            text = re.sub(r'^\d+\s*C\s*°\s*', '', text)
-            text = re.sub(r'^C\s*°\s*', '', text)
-            text = re.sub(r'^\d+\s+', '', text)
-            text = re.sub(r'^[^\w\s]+', '', text)
-            return text.strip()
-
-        # Textos genéricos / ruído de folheto que nunca são produtos
-        NOISE_PATTERNS = [
-            r'\bseg\b', r'\bdom\b', r'\besta semana\b', r'\bcomprar bem\b',
-            r'\bpoupa\b', r'\bcusta pouco\b', r'\bpreços válidos\b',
-            r'\bválido\b', r'\bvalidade\b', r'\bmais produtos\b',
-            r'\boferta limitada\b', r'\bpor tempo limitado\b', r'\bno folheto\b',
-            r'\bfolheto\b', r'\bveja o folheto\b', r'\bdepósito\b',
-            r'\bacresce valor de depósito\b', r'\bembalagem\b', r'\bpreço por\b',
-            r'\bpvp unitário\b', r'\bna compra de\b', r'\bpor cada\b',
-            r'\bpara comprar\b', r'\bunidades do mesmo\b', r'\bdo mesmo sabor\b',
-            r'\boferta de lançamento\b', r'\btroféu de confiança\b',
-            r'\bqualidade ao melhor preço\b', r'\bpreço de lançamento\b',
-            r'\bsubstituição\b', r'\bdireito de reversão\b', r'\bdevolução\b',
-            r'\bcada cápsula\b', r'\bpor cápsula\b', r'\bcada unidade\b',
-            r'\bpreço da unidade\b', r'\bunidade\b', r'\bpreço por unidade\b',
-            r'\bkg\b$', r'\bl\b$', r'\bx semana\b', r'\bsemana exterior\b',
-            r'\bsemana interior\b', r'\bsemissombra\b',
-        ]
-        NOISE_EXACT = {
-            'seg', 'dom', 'sex', 'sáb', 'ter', 'qua', 'qui',
-            'esta semana', 'comprar bem', 'poupa', 'custa pouco',
-            'acresce valor de depósito', 'por tempo limitado', 'veja o folheto',
-        }
-
-        def is_noise(text):
-            lowered = text.lower()
-            if lowered.strip() in NOISE_EXACT:
-                return True
-            # Datas isoladas ou "Seg. 3.8." style headers já removidas pelo regex de datas
-            for pat in NOISE_PATTERNS:
-                if re.search(pat, lowered):
-                    return True
-            # Texto sem qualquer letra (só números/símbolos)
-            if not re.search(r'[a-záàâãéêíóôõúç]+', lowered):
-                return True
-            return False
-
-        def extract_brand_and_name(desc):
-            brand = None
-            name = desc
-            
-            if '®' in desc:
-                parts = desc.split('®', 1)
-                brand = parts[0].strip()
-                name = parts[1].strip()
-            else:
-                words = desc.split()
-                upper_words = []
-                for w in words[:3]:
-                    w_clean = re.sub(r'[^\w]', '', w)
-                    if w_clean.isupper() and len(w_clean) >= 2:
-                        upper_words.append(w)
-                    else:
-                        break
-                if upper_words:
-                    brand = " ".join(upper_words)
-                    name = desc[len(brand):].strip()
-            
-            name = re.sub(r'^[\s,;\-\:]+', '', name).strip()
-            return brand, name
-
-        for page_num, raw_text in enumerate(page_texts):
-            # Limpar padrões de datas (ex: 25.5.26 ou 25/5/26) para evitar falsos positivos de preços
-            text = re.sub(r'\b\d{1,2}[\./\-]\d{1,2}[\./\-]\d{2,4}\b', ' ', raw_text)
-            
-            # Padrão de preço em folhetos iPaper (ex: "2. 39", "12. 99", "0. 89")
-            price_pattern = r'\b(\d+)\s*\.\s*(\d{2})\b'
-            price_matches = list(re.finditer(price_pattern, text))
-            
-            last_idx = 0
-            for idx, pm in enumerate(price_matches):
-                price_val = float(f"{pm.group(1)}.{pm.group(2)}")
-                price_start, price_end = pm.span()
-                
-                pre_segment = text[last_idx:price_start].strip()
-                
-                # Ignorar unit prices / taxas de conversão intermédias (ex: "kg =", "l =", "kg  =")
-                if re.search(r'\b(?:kg|l)\s*=\s*$', pre_segment.lower()) or pre_segment.endswith('%'):
-                    last_idx = price_end
+    def _extract_page_texts(self, page_texts, category, leaflet_url):
+        products = {}
+        leaflet_validity = self._validity(' '.join(page_texts))
+        price_pattern = re.compile(r'(?<![\d.,])(\d{1,4})\s*[.,]\s*(\d{2})(?!\d)')
+        unit_pattern = re.compile(r'\b(\d+(?:[.,]\d+)?(?:\s*[-x]\s*\d+(?:[.,]\d+)?)?\s*(?:kg|gr|g|ml|cl|l|unidades?|un))\b', re.I)
+        for page_index, raw in enumerate(page_texts, start=1):
+            # Dates and unit-price parentheses are not selling prices. Keep the
+            # full product segment while passing over unit prices inside it.
+            text = raw.replace('\u200b', ' ').replace('\u2009', ' ').replace('\u00a0', ' ')
+            text = re.sub(r'\b\d{1,2}[./-]\d{1,2}[./-]\d{2,4}\b', ' ', text)
+            text = re.sub(r'(?:Seg|Ter|Qua|Qui|Sex|Sáb|Dom)\.\s*\d{1,2}\.\d{1,2}\.', ' ', text, flags=re.I)
+            text = re.sub(r'A partir de\s*', ' ', text, flags=re.I)
+            matches = list(price_pattern.finditer(text))
+            last_end = 0
+            for index, match in enumerate(matches):
+                prefix = text[last_end:match.start()]
+                raw_prefix = prefix
+                # Never let a unit price consume the product name before it.
+                if prefix.rfind('(') > prefix.rfind(')') or re.search(r'\b(?:kg|l|un\.?|unidade)\s*=\s*$', prefix, re.I):
                     continue
-                
-                # Extrair âncoras de promoção (se existirem no segmento)
-                promo_pattern = r'\b(APROVEITA|MELHOR PREÇO|EXPERIMENTA|APENAS|-\d+%)\b'
-                promo_match = re.search(promo_pattern, pre_segment)
-                promo_label = promo_match.group(1) if promo_match else None
-                
-                clean_desc = pre_segment
-                if promo_label:
-                    clean_desc = clean_desc.replace(promo_label, '').strip()
-                
-                clean_desc = clean_text_field(clean_desc)
-                # Remover numeração de página no fim do segmento
-                clean_desc = re.sub(r'\s+\d+$', '', clean_desc)
-
-                # Filtros de validação estritos para evitar ruído / textos genéricos
-                if len(clean_desc) < 10:
-                    last_idx = price_end
+                price = float(f'{match[1]}.{match[2]}')
+                last_end = match.end()
+                if price <= 0:
                     continue
-                if any(w in clean_desc.lower() for w in ['pvpr', '1.ª un', '2.ª un', 'un. =', 'unidade =', 'custa pouco', 'compra ao', 'desconto', 'poupa', 'esta semana', 'folheto', 'preços válidos', 'limitado ao', 'pv unitário', 'na compra de', 'do mesmo sabor', 'unidades do mesmo']):
-                    last_idx = price_end
+                # Broken PDF reading order (e.g. '16 9 . 9') cannot be paired
+                # to the following product's correctly printed price.
+                if re.search(r'\b\d+\s+\d+\s*[.,]\s*\d+\b|\b[A-Za-z]\s+kg\s+\w', prefix):
                     continue
-                if is_noise(clean_desc):
-                    last_idx = price_end
+                # Remove known leaflet chrome. A branded product after a page
+                # footnote has an explicit boundary, so retain that later item.
+                branded = list(re.finditer(r'\b([A-ZÀ-Ý][A-ZÀ-Ý0-9&\s-]{1,45})\s*®', prefix))
+                brand = None
+                if branded:
+                    anchor = branded[-1]
+                    brand = anchor[1].strip()
+                    # Marketing calls can precede the brand in an all-caps run.
+                    brand = re.split(r'APROVEITA|EXPERIMENTA|NOVO|DESCONTO|UMA VIAGEM DE SABORES À', brand)[-1].strip()
+                    prefix = prefix[anchor.end():]
+                prefix = re.sub(r'\([^)]*\)', ' ', prefix)
+                prefix = re.sub(r'C\s*°|APROVEITA|MELHOR PREÇO|SUPER PREÇO|EXPERIMENTA|APENAS|NOVO|[-–]?\s*\d+\s*%', ' ', prefix, flags=re.I)
+                prefix = re.sub(r'CUSTA POUCO COMPRAR BEM|CUSTA POUCO COMPRAR FRESCOS TODOS OS DIAS', ' ', prefix, flags=re.I)
+                prefix = re.sub(r'^\s*[-–\d.\s]+', '', prefix)
+                description = re.sub(r'\s+', ' ', prefix).strip(' ;:-')
+                description = re.sub(r'^(?:kg|unidade|embalagem)\s+', '', description, flags=re.I)
+                if not 4 <= len(description) <= 180 or not re.search(r'[a-zà-ÿ]', description, re.I):
                     continue
-                # Textos com asterisco (*PVP...) são notas de rodapé, não produtos
-                if '*' in clean_desc or clean_desc.startswith('PVP'):
-                    last_idx = price_end
+                # Conditions and page prose cannot safely be paired to a price.
+                if re.search(r'\*|\b(?:pvpr|pvp|folheto|preços válidos|limitad[oa]|informamos|descobre mais|comprar bem|na compra|por cada|cada ovo|desconto|poupa|aldi\.pt)\b', description, re.I):
                     continue
-                
-                brand, name = extract_brand_and_name(clean_desc)
-                if not name:
-                    last_idx = price_end
-                    continue
-                
-                # Tentar inferir a unidade (peso/volume)
-                unit = None
-                unit_match = re.search(r'\b(\d+(?:[\.,]\d+)?\s*(?:g|ml|l|kg|unidades?))\b', name.lower())
+                if not brand:
+                    words = description.split()
+                    uppercase = []
+                    for word in words[:3]:
+                        if word.isupper() and len(word) > 1:
+                            uppercase.append(word)
+                        else:
+                            break
+                    if uppercase and len(uppercase) < len(words):
+                        brand = ' '.join(uppercase)
+                        description = description[len(brand):].strip()
+                unit_match = unit_pattern.search(description)
+                unit = unit_match[1] if unit_match else ('kg' if re.search(r'\bkg\b', description) else None)
+                name = description
                 if unit_match:
-                    unit = unit_match.group(1).strip()
-                
-                # Gerar external_id determinístico de forma a atualizar preços em futuras edições
-                slug_brand = re.sub(r'[^a-z0-9]', '', (brand or 'generico').lower())
-                slug_name = re.sub(r'[^a-z0-9]', '', name.lower())
-                external_id = f"aldi-{slug_brand}-{slug_name}"[:100]
-                
-                products.append({
-                    'category_id': None,
-                    'category_name': category.get('name'),
-                    'external_id': external_id,
-                    'name': name,
-                    'brand': brand,
-                    'price': price_val,
-                    'unit': unit,
-                    'url': leaflet_url,
-                    'in_stock': True,
-                    'deleted': False
-                })
-                
-                last_idx = price_end
-
-        print(f"    Total de produtos extraídos do Aldi: {len(products)}")
-        return products
+                    name = description[:unit_match.start()].strip(' ;:-')
+                name = re.sub(r'\s*\b(?:embalagem|unidade|embalado|kg)\s*$', '', name, flags=re.I).strip()
+                if not name or len(name) < 4:
+                    continue
+                identity = '|'.join((self._slugify(brand), self._slugify(name), self._slugify(unit)))
+                external_id = 'aldi-' + hashlib.sha256(identity.encode()).hexdigest()[:24]
+                reference_price = None
+                if index + 1 < len(matches):
+                    following = matches[index + 1]
+                    between = text[match.end():following.start()].strip()
+                    if not between or between.upper() == 'PVPR':
+                        old_price = float(f'{following[1]}.{following[2]}')
+                        if old_price > price:
+                            reference_price = old_price
+                metadata = {
+                    'coverage': 'promotions', 'availability_scope': 'advertised_in_store',
+                    'store_stock_confirmed': False, 'extraction_method': 'leaflet_text',
+                    'extraction_confidence': 'low', 'leaflet_page': page_index,
+                    **leaflet_validity, **self._validity(raw),
+                }
+                # Only an explicit unit-price parenthesis belonging to this
+                # candidate is safe; never borrow a value from a previous item.
+                unit_price, price_unit = None, None
+                unit_source = re.sub(r'\s+', ' ', raw_prefix)
+                name_position = unit_source.casefold().rfind(name.casefold())
+                # Some leaflets print a previous product's unit price after its
+                # selling price. Only read parentheses after this item's name.
+                unit_source = unit_source[name_position + len(name):] if name_position >= 0 else ''
+                unit_prices = re.findall(r'\(([^)]*\b(?:kg|l|un)\s*=[^)]*)\)', unit_source, re.I)
+                if unit_prices and not re.search(r'\d\s*[-/]\s*\d', unit_prices[-1]):
+                    unit_price, price_unit = self._parse_unit_price(unit_prices[-1])
+                product = self._enrich_product({
+                    'category_id': None, 'category_name': category.get('name'),
+                    'external_id': external_id, 'name': name, 'brand': brand,
+                    'description': description, 'price': price, 'price_currency': 'EUR',
+                    'regular_price': reference_price, 'unit': unit, 'url': leaflet_url,
+                    'image_url': None, 'in_stock': True, 'deleted': False,
+                    'unit_price': unit_price, 'unit_price_unit': price_unit,
+                }, metadata=metadata)
+                # Repeated cover offers should not duplicate the same product.
+                products.setdefault(external_id, product)
+        return list(products.values())
