@@ -8,10 +8,10 @@ WORKDIR /usr/src/app
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-# Runtime Node.js 20 (versão LTS)
+# Runtime Node.js 24 LTS
 RUN apt-get update && apt-get install -y --no-install-recommends \
       curl gnupg ca-certificates && \
-    curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
+    curl -fsSL https://deb.nodesource.com/setup_24.x | bash - && \
     apt-get install -y --no-install-recommends nodejs && \
     rm -rf /var/lib/apt/lists/*
 
@@ -40,7 +40,7 @@ USER appuser
 
 # Healthcheck usado pelo Azure Container Apps (substitui o TCP-only default).
 HEALTHCHECK --interval=30s --timeout=3s --start-period=15s --retries=3 \
-  CMD curl -fsS http://127.0.0.1:3000/api/health || exit 1
+  CMD curl -fsS http://127.0.0.1:3000/api/live || exit 1
 
 EXPOSE 3000
 CMD ["npm", "start"]

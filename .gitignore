@@ -49,3 +49,6 @@ test_robust_parser.py
 
 # ---- Local build secrets (never commit) ----
 mobile/app.config.local.json
+
+# Local deployment inventory
+deploy/azure/*.local.md

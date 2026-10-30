@@ -99,6 +99,10 @@ app.use('/api/categories', categoriesRouter);
 app.use('/api/scrape', scrapeRouter);
 app.use('/api/supermarkets', supermarketsRouter);
 
+// Platform probes must not keep a serverless database awake. The explicit
+// /api/health endpoint below still checks the real database connection.
+app.get('/api/live', (req, res) => res.json({ status: 'ok' }));
+
 app.get('/api/health', async (req, res) => {
   // Health check real: além de provar que o processo está vivo, reporta o estado
   // da ligação à BD (usado pelos probes/liveness do Azure Container Apps).

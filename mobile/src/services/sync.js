@@ -207,7 +207,7 @@ async function pullCatalog(database, endpoint, options = {}) {
       response = await axios.get(`${endpoint}/api/sync`, {
         params,
         // Timeout tolerates a cold start of the server's free tier.
-        timeout: 60000,
+        timeout: 90000,
       });
     } catch (error) {
       // A restored server with an older watermark rejects a future client

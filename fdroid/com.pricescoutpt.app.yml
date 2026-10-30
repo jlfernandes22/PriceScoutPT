@@ -156,7 +156,7 @@ MaintainerNotes: |-
   in app/build.gradle (10 * %c + 1..4, per the F-Droid ABI split guide).
 
   The app talks to the shared production backend
-  (https://pricescoutpt-api.yellowflower-63c75e19.northeurope.azurecontainerapps.io),
+  (https://pricescoutpt-api.onrender.com),
   which is baked in as the default API base URL since commit 99669cf. The
   recipe does not need to set apiBaseUrl: the emulator-only fallback
   (http://10.0.2.2:3000) has been removed, and the expo extra apiBaseUrl

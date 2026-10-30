@@ -140,7 +140,9 @@ class AldiScraper(ScraperBase):
                 if unit_match:
                     name = description[:unit_match.start()].strip(' ;:-')
                 name = re.sub(r'\s*\b(?:embalagem|unidade|embalado|kg)\s*$', '', name, flags=re.I).strip()
-                if not name or len(name) < 4:
+                # A price can also occur inside page prose or a broken pack
+                # annotation. Neither is a product name, even with letters.
+                if not name or len(name) < 4 or not name[0].isalpha() or '€' in name:
                     continue
                 identity = '|'.join((self._slugify(brand), self._slugify(name), self._slugify(unit)))
                 external_id = 'aldi-' + hashlib.sha256(identity.encode()).hexdigest()[:24]

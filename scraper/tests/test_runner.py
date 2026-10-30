@@ -42,6 +42,17 @@ class RunnerTests(unittest.TestCase):
             self.assertTrue(errors)
             self.assertFalse(scraper.marked)
 
+    def test_discovery_failure_prints_recorded_source_error(self):
+        class FailedDiscovery(FakeScraper):
+            def discover_categories(self):
+                self.scrape_errors.append('category discovery: HTTP 403 from the public source')
+                return []
+
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output), contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(run_scraper(FailedDiscovery(), []), 0)
+        self.assertIn('category discovery: HTTP 403 from the public source', output.getvalue())
+
     def test_partial_collection_preserves_prices_and_surfaces_parser_errors(self):
         scraper = FakeScraper(partial=True)
         scraper.allow_mark_missing = True

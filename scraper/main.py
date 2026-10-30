@@ -70,12 +70,15 @@ def run_scraper(scraper, errors_list, details_limit=0) -> int:
             message = f'{scraper.__class__.__name__}: {error}'
             if message not in errors_list:
                 errors_list.append(message)
+                print(f'  Error: {message}', flush=True)
         if not all_products:
             raise ValueError('No products extracted; refusing to report a successful run.')
         if details_limit:
             scraper.enrich_product_details(all_products, limit=details_limit)
             for error in getattr(scraper, 'detail_errors', []):
-                errors_list.append(f'{scraper.__class__.__name__} detail enrichment: {error}')
+                message = f'{scraper.__class__.__name__} detail enrichment: {error}'
+                errors_list.append(message)
+                print(f'  Error: {message}', flush=True)
         written = scraper.sync_to_db(all_products)
 
         # Marcar como esgotados os produtos que deixaram de ser encontrados,
@@ -99,6 +102,7 @@ def run_scraper(scraper, errors_list, details_limit=0) -> int:
             message = f'{scraper.__class__.__name__}: {error}'
             if message not in errors_list:
                 errors_list.append(message)
+                print(f'  Error: {message}', flush=True)
         return 0
         
     return written

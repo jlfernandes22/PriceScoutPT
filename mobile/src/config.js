@@ -8,9 +8,13 @@ import Constants from 'expo-constants';
 // fixo: pode ser substituído em runtime (Definições → Servidor) por um
 // endpoint próprio/self-hosted, sem reconstruir a app (ver setApiBaseUrl).
 export const DEFAULT_API_BASE_URL =
-  'https://pricescoutpt-api.whitebay-deadf40d.spaincentral.azurecontainerapps.io';
+  'https://pricescoutpt-api.onrender.com';
 
 const SERVER_URL_KEY = '@api_base_url';
+const RETIRED_PRODUCTION_URLS = new Set([
+  'https://pricescoutpt-api.whitebay-deadf40d.spaincentral.azurecontainerapps.io',
+  'https://pricescoutpt-api.yellowflower-63c75e19.northeurope.azurecontainerapps.io',
+]);
 
 // Normaliza um URL de servidor: exige http(s), remove barras finais e
 // espaços. Aceita sem esquema ("meuservidor.example:3000" → https://...).
@@ -43,7 +47,10 @@ export const loadApiBaseUrl = async () => {
   try {
     const saved = await AsyncStorage.getItem(SERVER_URL_KEY);
     const normalized = normalizeBaseUrl(saved);
-    if (normalized) {
+    if (RETIRED_PRODUCTION_URLS.has(normalized)) {
+      currentBaseUrl = DEFAULT_API_BASE_URL;
+      await AsyncStorage.removeItem(SERVER_URL_KEY);
+    } else if (normalized) {
       currentBaseUrl = normalized;
     }
   } catch (e) {

@@ -44,6 +44,9 @@ const DEFAULT_SCRAPERS = VALID_SCRAPERS.filter(name => name !== 'Intermarche');
 // POST /api/scrape — dispara uma nova recolha de dados (fresca) em background
 // Protegido por SCRAPE_SECRET (opcional) para evitar abuso
 router.post('/', (req, res, next) => {
+  if (!SCRAPE_SECRET && process.env.NODE_ENV === 'production') {
+    return res.status(503).json({ error: 'Remote collection requires SCRAPE_SECRET.' });
+  }
   if (SCRAPE_SECRET) {
     const authHeader = req.headers['x-scrape-secret'];
     if (authHeader !== SCRAPE_SECRET) {
@@ -77,8 +80,12 @@ router.post('/', (req, res, next) => {
     });
   }
   const valid = [...new Set(selected)];
+  const detailsLimit = req.body?.details_limit ?? 0;
+  if (!Number.isInteger(detailsLimit) || detailsLimit < 0 || detailsLimit > 250) {
+    return res.status(400).json({ error: 'details_limit must be an integer between 0 and 250.' });
+  }
 
-  const args = [];
+  const args = ['--details-limit', String(detailsLimit)];
   if (valid.length > 0) {
     args.push('--scraper', valid.join(','));
   }
@@ -134,7 +141,7 @@ router.post('/', (req, res, next) => {
     }
   });
 
-  res.status(202).json({ job_id: jobId, status: 'running', scrapers: valid.length > 0 ? valid : VALID_SCRAPERS });
+  res.status(202).json({ job_id: jobId, status: 'running', scrapers: valid.length > 0 ? valid : DEFAULT_SCRAPERS });
 });
 
 // GET /api/scrape/status/:id — consulta o progresso de um job
