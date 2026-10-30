@@ -30,7 +30,7 @@
       "supportsTablet": true
     },
     "extra": {
-      "apiBaseUrl": "https://pricescoutpt-api.whitebay-deadf40d.spaincentral.azurecontainerapps.io",
+      "apiBaseUrl": "https://pricescoutpt-api.onrender.com",
       "scrapeSecret": "",
       "note": "Valores reais de apiBaseUrl/scrapeSecret vivem em app.config.local.json (ignorado pelo git). Deixar vazio assume o fallback de desenvolvimento local."
     },
