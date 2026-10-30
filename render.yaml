@@ -1,0 +1,20 @@
+# Render hosts only the API. Persistent PostgreSQL is supplied by Neon Free.
+services:
+  - type: web
+    name: pricescoutpt-api
+    runtime: docker
+    plan: free
+    region: frankfurt
+    repo: https://github.com/jlfernandes22/PriceScoutPT
+    branch: main
+    dockerfilePath: ./api/Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/live
+    autoDeployTrigger: 'off'
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: SCRAPE_SECRET
+        generateValue: true

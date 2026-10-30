@@ -292,6 +292,10 @@ class AldiTest(unittest.TestCase):
         text = 'Maminha de Bovino APROVEITA 16 9 . 9 kg Peito de Frango APROVEITA 5. 89 kg'
         self.assertEqual(self.scraper._extract_page_texts([text], {'name': 'Oportunidades'}, 'https://folhetos.aldi.pt/weekly'), [])
 
+    def test_pack_fragments_and_advertising_prose_are_not_products(self):
+        pages = ['€; pack de 1.98', ', 2, 1. OS TEUS CARTÕES PRÉ-PAGOS CHEGARAM! ENCONTRA-OS JUNTO ÀS CAIXAS DE PAGAMENTO. NOVIDADE DESDE 10.00']
+        self.assertEqual(self.scraper._extract_page_texts(pages, {'name': 'Oportunidades'}, 'https://folhetos.aldi.pt/weekly'), [])
+
     def test_missing_leaflet_link_reports_failure_without_unbound_response(self):
         self.scraper.get_with_retry = Mock(side_effect=[requests.ConnectionError('offline'), response('<div>no leaflet</div>')])
         self.assertEqual(self.scraper.scrape_category({'name': 'Oportunidades', 'path': '/folheto/esta-semana.html'}), [])
