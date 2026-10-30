@@ -2,6 +2,7 @@
 
 The API runs on Render Free in Frankfurt; persistent PostgreSQL runs on Neon
 Free in Frankfurt. Do not provision Render's expiring free PostgreSQL service.
+Production API: https://pricescoutpt-api.onrender.com (database check: `/api/health`).
 No payment method or paid add-on is required. Free quotas can pause service;
 review usage rather than upgrading automatically.
 

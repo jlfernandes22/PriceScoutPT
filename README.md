@@ -9,12 +9,15 @@
 ![React Native](https://img.shields.io/badge/React%20Native%20(Expo%2054)-1.0-blue?logo=react)
 ![Node.js](https://img.shields.io/badge/API-Node.js%20%2F%20Express-339933?logo=nodedotjs)
 ![Python](https://img.shields.io/badge/Scrapers-Python%203-3776AB?logo=python)
-![PostgreSQL](https://img.shields.io/badge/DB-PostgreSQL%2015-4169E1?logo=postgresql)
-![Azure](https://img.shields.io/badge/Deploy-Azure%20Container%20Apps-0078D4?logo=microsoftazure)
+![PostgreSQL](https://img.shields.io/badge/DB-PostgreSQL%2018-4169E1?logo=postgresql)
+![Render](https://img.shields.io/badge/API-Render%20Free-46E3B7?logo=render)
+![Neon](https://img.shields.io/badge/DB-Neon%20Free-00E599)
 ![Offline](https://img.shields.io/badge/offline--first-WatermelonDB-00C7B7)
 ![License](https://img.shields.io/badge/license-GPL--3.0-brightgreen)
 
 </div>
+
+Produção: [API Render](https://pricescoutpt-api.onrender.com/api/health) + Neon Free, em Frankfurt. Consulta o [guia de alojamento gratuito](deploy/free/README.md). Não é necessária uma subscrição Azure para esta configuração.
 
 ---
 
@@ -272,6 +275,8 @@ docker exec pricescoutpt_db psql -U postgres -d pricescoutpt -c \
 
 ## ☁️ Deploy no Azure
 
+Esta é uma alternativa histórica. A produção atual usa [Render + Neon Free](deploy/free/README.md).
+
 | Serviço | Configuração mínima | Custos/limites |
 |---|---|---|
 | **Azure Container Apps** (API + runtime do scraper) | Consumption, 0,5 CPU / 1 GiB, 0–1 réplicas | Franquias mensais partilhadas por subscrição; excesso pode ser cobrado |
@@ -299,13 +304,11 @@ Duas modalidades:
 
 ## 📅 Recolha diária automática
 
-`.github/workflows/daily-scrape.yml` corre os seis scrapers HTTP **diretamente no runner do GitHub Actions** todos os dias às 12:00 UTC (12:00 em Portugal no inverno, 13:00 no verão) e escreve na base de dados da Azure. Isto evita depender do tempo de vida do contentor da API durante recolhas longas. Adiciona o segredo no GitHub (*Settings → Secrets → Actions*):
+O workflow `daily-scrape.yml` corre todos os dias às 12:00 UTC. Aldi, Lidl, Pingo Doce, Auchan e Continente correm no runner público do GitHub; Froiz corre pela API Render, que o workflow acompanha até terminar. Todos guardam observações no Neon com um utilizador de acesso limitado.
 
-- `PRICESCOUTPT_DATABASE_URL` — ligação ao PostgreSQL da Azure (ex: `postgres://user:pass@pricescoutpt.postgres.database.azure.com:5432/postgres?sslmode=require`)
+Configura os segredos `PRICESCOUTPT_DATABASE_URL` e `PRICESCOUT_API_SCRAPE_SECRET`, e a variável `PRICESCOUT_API_URL`. Não são necessárias credenciais Azure, OIDC ou regras temporárias de firewall. Os nomes e os passos completos estão no [guia de alojamento gratuito](deploy/free/README.md).
 
-Podes também disparar manualmente por *Actions → Recolha Diária de Preços → Run workflow*, escolhendo um coletor, `Froiz,Aldi` para uma recolha inicial curta ou `all`. A recolha diária enriquece até 100 páginas de detalhe por coletor; o modo manual permite 0, 25, 100 ou 250. O workflow tem um limite de 180 minutos, não envia webhooks e partilha um grupo de concorrência entre execuções agendadas e manuais, sem cancelar a recolha em curso.
-
-Usa a branch `main` nos disparos manuais. A autenticação OIDC usa as variáveis não secretas `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `AZURE_RESOURCE_GROUP` e `AZURE_POSTGRES_SERVER`. Cada execução permite apenas o IPv4 do seu runner na firewall do PostgreSQL e remove a regra no fim; vê [configuração e permissões](docs/azure-multi-user.md).
+Usa *Actions → Recolha Diária de Preços → Run workflow*, na branch `main`, para executar manualmente. Podes escolher coletores e um máximo de 0, 25, 100 ou 250 páginas de detalhe por coletor. O workflow tem um limite de 180 minutos, não envia webhooks e não cancela recolhas em curso. Falhas e cobertura parcial são reportadas; observações já guardadas são preservadas. A recolha verifica o espaço da base de dados antes e depois, com uma proteção aos 800 MiB.
 
 ---
 
